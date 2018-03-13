@@ -1,0 +1,199 @@
+---
+title: "Homework 1"
+author: "Juan Harrington"
+date: "January 16, 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(GGally)
+library(gridExtra)
+library(knitr)
+```
+
+# Question 2.4.2
+
+a)  By collecting a set of data on the top 500 firms in the U.S. including record profit, number of employees, industry and the CEO salary to understand factors that affect CEO salary the scenario is considered a regression problem with an interst in inference.  The number of observations *n* is 500 and the number of variables *p* is 3 (profit, number of employees, and industry).
+
+b)  Wanting to know whether launching a new product will be a success or failure makes it a classification problem with an interest in prediction.  The number of observations *n* is 20 and the number of variables *p* is 13 (price charged, marketing budget, competition price, and ten other variables).
+
+c)  With an interest in predicting the percent change in exchange rate between the USD and Euro in relation to weekly changes in world stock markets the scenario is considered to be a regression problem with an interest in prediction.  The number of observations *n* is 52 and the number of variables *p* is 3 (% change in US market, % change in British market, and % change in German market).
+
+# Question 2.4.4
+
+a)  The first application where classification might be useful is in breast cancer detection.  A response would be whether a tumor was malignant or benign and the predictors might be age, clump thickness, cell size, cell shape, mitosis, number of normal nuclei, and various other genetic values.  The goal would be prediction.  Another application that classification might be useful is in detecting email messages that might be spam.  The response variable would be whether the email is spam or not and the predictor would be the text of the email.  A basic method looks at relative frequency of words.  The goal would be prediction.  A third application that classification might be useful is in credit card fraud detection.  The response variable would be whether the transaction was considered fraudulent or not and the predictors would be the credit card transation information.  The goal would be prediction.
+
+b)  The first application where regression might be useful is in advertising to determine which media increases sales the most.  A response would be the sales of a product and predictors would be which media causes the sales such as TV, radio, and newspaper.  The goal would be inference.  Another application where regression might be useful is in determining automobile fuel consumption.  The response variable would be miles per gallon (MPG) and predictors would be number of cylinders, engine displacement, horsepower, weight, and model year.  The goal would be inference.  A third application that regression might be useful is looking at body fat.  The response variable would be the body fat measurement and predictors would be age, waist circumference, hip circumference, breadth of elbow, breadth of knee, and different anthropometric measurements.  The goal for the scenario would be prediction.
+
+c)  The first application where cluster analysis may be useful is finding market segments of customer purchases.  The response would be the segment and the predictors would be past purchase information.  The goal would be prediction.  Another application that cluster analysis may be useful is in crime analysis.  The response would be "hot spots" of particular types of crime.  The predictors would be location, time of day, and type of crime.  The goal would be prediction by identifying areas where particular crimes have a greater occurence.  The third application where cluster analysis may be useful is in classifying plants.  The response would be the plant group and the predictors would be different features of the plant.  This goal for the scenario would be prediction.
+
+# Question 2.4.6
+
+  Both parametric and non-parametric methods can be used to estimate the unknown function $f$ in $Y = f(x)$.  The differences between parametric and non-parametrics statistical learning is that parametric methods involve a two-step model-based approach.  It uses assumptions about the functional form of the data and model.  An advantange is that it simplifies the problem of estimating $f$.  A disadvantage of the parametric approach is that the selected model won't usually match the true unknown form of $f$.  Non-parametric methods do not make assumptions about the functional form of the data.  It looks for an estimate that gets close to data points and are is better at accurately fitting a wider range of shapes the data may have.  One disadvantage of non-parametric methods is that it needs a very large number of observations to get an accurate estimate.
+
+# Question 2.4.8
+
+## Part a
+
+Use the read.csv() function to read the data into R.  Call the loaded data `college`.
+
+```{r,include=F,warning=F,message=F}
+college <- read.csv("college.csv")
+```
+
+## Part b
+
+Look at the data using the fix() function. You should notice that the first column is just the name of each university. We don't really want R to treat this as data. However, it may be handy to have these names for later.
+
+```{r,include=F,warning=F,message=F}
+rownames(college) = college[,1]
+#fix(college)
+
+college = college[,-1]
+#fix(college)
+```
+
+## Part c
+
+i.  Use the summary() function to produce a numerical summary of the variables in the dataset.
+
+```{r,echo=F,warning=F,message=F}
+summary(college)
+```
+
+ii. Use the pairs() function to produce a scatterplot matrix of the first ten columns or variables of the data.
+
+```{r,echo=F,warning=F,message=F,fig.width=9,fig.height=9}
+# standard plot
+pairs(college[,1:10])
+
+# ggplot
+# too many plots for this example making it messy
+# however the question asks to plot first ten columns.
+# adjusted fig width and height best I could
+ggpairs(college[,1:10]) +
+      theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+iii.  Use plot() function to produce side-by-side boxplots of `Outstate` versus `Private`.
+
+```{r,echo=F,warning=F,message=F}
+# standard plot
+plot(college$Outstate~college$Private,
+     main = "Distribution of Out-of-state tuition for College Type ", 
+     xlab = "Private", ylab = "Outstate") 
+
+# ggplot
+ggplot(college, aes(Private, Outstate)) +
+  ggtitle("Distribution of Out-of-state tuition for College type") +
+  geom_boxplot()
+```
+
+iv.  Create a new qualitative variable, called Elite, by binning the Top10perc variable.  Use the summary() function to see how many elite universities there are. Now use the plot() function to produce side-by-side boxplots of Outstate versus Elite.
+
+```{r,echo=F,warning=F,message=F}
+# create elite variable and view summary of elite
+elite <- rep("No", nrow(college))
+elite[college$Top10perc > 50] = "Yes"
+elite <- as.factor(elite)
+college <- data.frame(college, elite)
+kable(summary(elite), 
+      caption = "Number of Elite colleges",
+      col.names = c("Count"))
+
+# standard plot
+plot(college$Outstate~college$elite,
+     main = "Distribution of Out-of-state tuition in Elite Colleges ", 
+     xlab = "Elite College", ylab = "Outstate")
+
+# ggplot
+ggplot(college, aes(elite, Outstate)) +
+  ggtitle("Distribution of Out-of-state tuition in Elite Colleges") +
+  geom_boxplot()
+```
+
+v.  Use the hist() function to produce histograms with different binning for a few of the quantitative variables.
+
+```{r,echo=F,warning=F,message=F}
+par(mfrow=c(2,2))
+
+# standard plots
+hist(college$Apps, breaks=10,
+     main="Applications Received, Break = 10",
+     xlab = "Applications")
+
+hist(college$Apps, breaks=40,
+     main="Applications Received, Break = 40",
+     xlab = "Applications")
+
+hist(college$Enroll, breaks=10,
+     main="Students Enrolled, Break = 10",
+     xlab = "Enrolled")
+
+hist(college$Enroll, breaks=30,
+     main="Students Enrolled, Break = 30",
+     xlab = "Enrolled")
+
+# ggplot
+p1 <- qplot(college$Apps,
+      geom = "histogram",
+      bins = 10,  
+      main = "Applications Received, Bins = 10", 
+      xlab = "Applications")
+
+p2 <- qplot(college$Apps,
+      geom = "histogram",
+      bins = 40,  
+      main = "Applications Received, Bins = 40", 
+      xlab = "Applications")
+ 
+p3 <- qplot(college$Enroll,
+      geom = "histogram",
+      bins = 10,  
+      main = "Students Enrolled, Bins = 10", 
+      xlab = "Enrolled")
+ 
+p4 <- qplot(college$Enroll,
+      geom = "histogram",
+      bins = 30,  
+      main = "Students Enrolled, Bins = 30", 
+      xlab = "Enrolled")
+
+grid.arrange(p1, p2, p3, p4, ncol = 2, top = "Histograms")
+```
+
+vi.  After exploring the college data further we see that the summary shows a couple variables that may have possible outliers.  The max percent of faculty with Ph.D.'s is 103, at Texas A&M University at Galveston.  Also, the max graduation rate is 118, at Cazenovia College. 
+
+```{r,include=F,echo=F,warning=F,message=F}
+# look at colleges with PhD rate above 100%
+phd.greater.100 <- college[college$PhD > 100, ]
+phd.greater.100[,0]
+# look at colleges with graduation rate above 100%
+grad.greater.100 <- college[college$Grad.Rate > 100, ]
+grad.greater.100[,0]
+```
+
+    Looking at the affect of student expenditure on graduation rate we see an increase as more is spent per student.  The summary shows that 75% of the colleges spend less than $11,000 per student.
+
+```{r,echo=F,warning=F,message=F}
+ggplot(college, aes(Expend, Grad.Rate)) +
+  ggtitle("Student expenditure affect on graduation rate") +
+  geom_point() + 
+  geom_smooth(method = "lm", se = TRUE)   +
+  labs(x = "Expenditure per Student", y = "Graduation rate") 
+```
+
+  Looking at the graduation rate between Public and Private colleges it appears that the graduation rate is higher for private colleges compared to public colleges.
+
+```{r,echo=F,warning=F,message=F}
+ggplot(college, aes(Private,Grad.Rate)) +
+  ggtitle("Distribution of Graduation Rate for Type of Colleges") +
+  geom_boxplot() +
+  labs(y = "Graduation rate") 
+```
+

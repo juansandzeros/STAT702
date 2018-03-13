@@ -1,0 +1,987 @@
+---
+title: "Homework 7"
+author: "Juan Harrington"
+date: "Match 13, 2018"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# load libraries
+library(ISLR)
+library(MASS)
+library(knitr)
+library(broom)
+library(boot)
+library(caret)
+library(class)
+library(mclust)
+library(e1071)
+
+# seed # for reproducibility
+seed <- 702
+# 5-fold cross validation
+k <- 5
+```
+
+# Question 5.4.1 
+
+```{r,include=FALSE,warning=F,message=F}
+# References:
+#http://www.columbia.edu/itc/sipa/math/calc_rules_func_var.html
+#https://www.youtube.com/watch?v=k9do8J-w9hY
+#https://www.youtube.com/watch?v=NDp33L5Qf9E
+#http://ocw.jhsph.edu/courses/MethodsInBiostatisticsI/PDFs/lecture4.pdf
+#https://www.youtube.com/watch?v=hCLfogkqzEk
+# Retrieved: 2/28/18
+```
+
+Using basic statistical properties of variance, as well as single-variable calculus, derive (5.6).  In other words, prove that $\alpha$ given by (5.6) does indeed minimize $Var(\alpha X + (1-\alpha)Y)$.  
+
+One can show that the value that minimizes is given by (5.6).
+
+$$\alpha = \frac{\sigma_Y^2 - \sigma_{XY}}{\sigma_X^2 + \sigma_Y^2 - 2\sigma_{XY}}$$
+
+where $\sigma_X^2=Var(X)$, $\sigma_Y^2=Var(Y)$, and $\sigma_{XY} = Cov(X, Y)$.
+
+We have
+
+$$ = Var(\alpha X) + Var((1-\alpha)Y) +2 Cov(\alpha X, (1-\alpha)Y)$$
+
+Using substitution to get
+
+$$  = \alpha^2 \sigma_X^2 + (1-\alpha)^2 \sigma_Y^2 + 2 \alpha (1-\alpha) \sigma_{XY}   $$
+Simplifying we get
+
+$$ = \alpha^2 \sigma_X^2 + (1+\alpha^2-2\alpha) \sigma_Y^2 + (2\alpha - 2\alpha^2) \sigma_{XY} $$
+
+$$ = \alpha^2 \sigma_X^2 + \sigma_Y^2+\alpha^2\sigma_Y^2-2\alpha\sigma_Y^2 + 2\alpha \sigma_{XY} - 2\alpha^2 \sigma_{XY} $$
+
+Taking the derivative relative to $\alpha$ we get
+
+$$ \frac{d}{d\alpha} =  2\alpha\sigma_X^2 + 2\alpha\sigma_Y^2 - 2\sigma_Y^2 + 2\sigma_{XY} - 4\alpha\sigma_{XY}  $$
+
+$$ (2\sigma_X^2 + 2\sigma_Y^2 - 4\sigma_{XY}) \alpha = 2\sigma_Y^2 - 2\sigma_{XY} $$
+
+Which implies that
+
+$$ \alpha = \frac{\sigma_Y^2 - \sigma_{XY}}{\sigma_X^2 + \sigma_Y^2 - 2\sigma_{XY}} $$
+
+# Question 5.4.6
+
+Continuing the use of logistic regression to predict the probability of `default` using `income` and `balance` on the `Default` data set from `ISLR` we are asked to compute estimates for the standard errors in two different ways.
+
+```{r,echo=F,include=FALSE,warning=F,message=F}
+# load default data from ISLR
+data("Default", package = "ISLR")
+```
+
+## Part a
+
+Fitting a multiple logistic regression model on the `Default` data set we determine the estimated standard errors for the coefficients associated with `income` and `balance`.  The estimated standard error is $0.0000050$ for `income` and $0.0002274$ for `balance`.
+
+```{r,echo=F,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+# fit logistic regression
+fit.default.glm <- glm(default ~ income + balance, data = Default,
+                       family = binomial())
+
+kable(tidy(fit.default.glm),
+      caption = "Logistic Regression Summary")
+```
+
+## Part b
+
+We are asked to write a function, `boot.fn()`, that takes as input the `Default` data set as well as an index of the observations, and that outputs the coefficient estimates for `income` and `balance` in the multiple logistic regression model.
+
+```{r,warning=F,message=F}
+boot.fn <- function(data, index) {
+  fit <- glm(default ~ income + balance, 
+             data = data, 
+             family = "binomial", 
+             subset = index)
+  
+  return(coef(fit))
+}
+```
+
+## Part c
+
+Using the `boot()` function together with the function created above the standard errors of the logistic regression coefficients for `income` and `balance` are estimated.  The bootstrap estimates of the standard errors for the coefficients is $0.0000049$ for `income` and $0.0002300$ for `balance`. 
+
+```{r,echo=F,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+bt <- boot(Default, boot.fn, 1000)
+kable(tidy(bt, conf.int = F),
+      caption = "Bootstrap Statistics")
+```
+
+## Part d
+
+The standard error of coefficient estimates are pretty close between the two methods.  For `income` the standard error of coefficient estimates is $0.0000050$ with glm and $0.0000049$ using bootstrap.  For `balance` it is $0.0002274$ with glm and $0.0002300$ using bootstrap.
+
+# Question 5.4.9
+
+```{r,echo=F,include=FALSE,warning=F,message=F}
+# load boston data from MASS
+data("Boston", package = "MASS")
+```
+
+## Part a
+
+Based on the `Boston` data set we are asked to provide an estimate for the population mean of `medv` named $\hat\mu$.
+
+```{r,echo=F,warning=F,message=F}
+mu.hat <- mean(Boston$medv)
+kable(mu.hat, col.names = c("$\\hat\\mu$"),
+      caption = "Population mean estimate")
+```
+
+## Part b
+
+Based on the `Boston` data set we are asked to provide an estimate of the standard error of $\hat\mu$.  This represents the population of Boston.  The standard error gives us the accuracy of the estimate or how much the mean will vary if a different sample is chosen.
+
+```{r,echo=F,warning=F,message=F}
+se.hat <- sd(Boston$medv)/sqrt(nrow(Boston))
+kable(se.hat, col.names = c("$\\hat\\mu$"),
+      caption = "Standard error estimate")
+```
+
+## Part c
+
+We are asked to provide an estimate of the standard error of $\hat\mu$ using bootstrap and compare to (b).  The estimated standard error of $\hat\mu$ of $0.408103$ for bootstrap is very close to the estimate found in (b) of $0.4088611$.
+
+```{r,echo=F,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+boot.fn <- function(data, index) {
+    mu <- mean(data[index])
+    return (mu)
+}
+
+bt1 <- boot(Boston$medv, boot.fn, 1000)
+kable(tidy(bt1, conf.int = F),
+      caption = "Bootstrap Statistics")
+```
+
+## Part d
+
+We are asked based on the bootstrap estimate from (c) to provide a 95% confidence interval for the mean of `medv` and compare with results obtained using `t.test(Boston$medv)`.
+
+The confidence intervals from the `t-test` are close to what is calculated using the boostrap estimate. 
+```{r,echo=F,warning=F,message=F}
+# t-test
+t.test(Boston$medv)
+
+# calculate 95% confidence interval
+CI.mu.hat <- c("lwr"=22.53281 - 2 * 0.408103, "upr"=22.53281 + 2 * 0.408103)
+kable(t(CI.mu.hat),
+      caption = "Bootstrap 95% confidence interval")
+```
+
+## Part e
+
+Based on the `Boston` data set we are asked to provide an estimate of $\hat\mu_{med}$, for the median value of `medv` in the population.
+
+```{r,echo=F,warning=F,message=F}
+mu.median <- median(Boston$medv)
+kable(mu.median, col.names = "medv",
+      caption = "Population median estimate")
+```
+
+## Part f
+
+We are asked to estimate the standard error of $\hat\mu_{med}$ by using bootstrap to calculate the standard error of the median.  The results show a small standard error relative to the median value.
+
+```{r,echo=F,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+boot.fn <- function(data, index) {
+  mu.median <- median(data[index])
+  return(mu.median)
+}
+
+bt2 <- boot(Boston$medv, boot.fn, 1000)
+kable(tidy(bt2, conf.int = F),
+      caption = "Bootstrap Statistics")
+```
+
+## Part g
+
+We are aked to provide an estimate for the tenth percentile of `medv` using the `quantile()` function and calling it $\hat\mu_{0.1}$.  The estimate for the tenth percentile of `medv` in the Boston suburbs is $12.75$.
+
+```{r,echo=F,warning=F,message=F}
+percent.hat_mu <- quantile(Boston$medv, c(0.1))
+percent.hat_mu
+```
+
+## Part h
+
+We are asked to use bootstrap to estimate the standard error of $\hat\mu_{0.1}$.  The standard error obtained using bootstrap is the same compared to the tenth percentile value from using `quantile` which means the estimate represents the population accurately.
+
+```{r,echo=F,,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+boot.fn <- function(data, index) {
+    mu <- quantile(data[index], c(0.1))
+    return (mu)
+}
+
+bt3 <- boot(Boston$medv, boot.fn, 1000)
+kable(tidy(bt3, conf.int = F),
+      caption = "Bootstrap Statistics")
+```
+
+# 4. 
+
+We are asked to use different classification methods such as Logistic Regression, KNN, LDA, QDA, MclustDA, MclustDA using a model type of EDDA, and a new method, like Support Vector Machines (SVM), which was not covered in class to estimate test errors for the validation set approach (VSA), LOOCV, and 5-fold cross validation. 
+
+```{r mush_data,echo=F,include=FALSE,warning=F,message=F}
+# reference: https://archive.ics.uci.edu/ml/datasets/mushroom
+# retrieved: 02/28/18
+# load dataset from url and set column names
+url <- "https://archive.ics.uci.edu/ml/machine-learning-databases/mushroom/agaricus-lepiota.data"
+mushrooms <- read.table(file = url, header = F, sep = ",", stringsAsFactors = T,
+                        col.names = c("class","cap.shape","cap.surface","cap.color","bruises","odor",
+                         "gill.attachment","gill.spacing","gill.size","gill.color","stalk.shape",
+                         "stalk.root","stalk.surface.above.ring","stalk.surface.below.ring",
+                         "stalk.color.above.ring","stalk.color.below.ring","veil.type","veil.color",
+                         "ring.number","ring.type","spore.print.color","population","habitat"))
+
+# remove variables with only one level
+mushrooms$veil.type <- NULL
+
+# References:
+# https://machinelearningmastery.com/why-one-hot-encode-data-in-machine-learning/
+# https://amunategui.github.io/dummyVar-Walkthrough/
+# https://stackoverflow.com/questions/40678170/caret-dummy-vars-exclude-target
+# Retrieved: 02/23/18
+
+# one-hot encoding to create dummy variables
+# using fullRank = T avoids the 'dummy variable' trap.
+dmy <- dummyVars(~., data = mushrooms, fullRank = T)
+dummy.mush <- data.frame(predict(dmy, newdata = mushrooms))
+colnames(dummy.mush)[1] <- "poisonous"
+```
+
+## Logistic Regression 
+
+```{r mush_glm_vsa,echo=F,warning=F,message=F}
+# validation set approach
+# set seed
+set.seed(seed)
+
+# split into training and test
+mush.train.lr <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.6)
+mush.test.lr <- dummy.mush[-mush.train.lr, ]
+
+# fit logistic regression
+fit.mush.glm.vsa <- glm(poisonous ~ spore.print.color.h + spore.print.color.k +
+                        spore.print.color.n + spore.print.color.o +
+                        spore.print.color.u + spore.print.color.w +
+                        spore.print.color.y,
+                        data = dummy.mush,
+                        family = binomial(), subset = mush.train.lr)
+
+# predict
+prob.mush.glm.vsa <- predict(fit.mush.glm.vsa, mush.test.lr, type="response")
+pred.mush.glm.vsa <- ifelse(prob.mush.glm.vsa > 0.5, 1, 0)
+
+# confusion matrix
+kable(table("Pred."=pred.mush.glm.vsa, "Actual"=mush.test.lr$poisonous),
+      caption = "Confusion Matrix for vsa")
+
+# error rate
+mush.glm.vsa.error <- mean(pred.mush.glm.vsa != mush.test.lr$poisonous)
+```
+
+```{r mush_glm_loocv,echo=F,warning=F,message=F}
+# LOOCV
+# set seed
+set.seed(seed)
+
+# create for loop performing LOOCV
+mush.glm.loocv.err <- rep(0, 100)
+for (i in 1:100) {
+  # fit logistic regression
+  fit.glm.loocv <- glm(poisonous ~ spore.print.color.h + spore.print.color.k +
+                      spore.print.color.n + spore.print.color.o +
+                      spore.print.color.u + spore.print.color.w +
+                      spore.print.color.y,
+                      data = dummy.mush[-i, ],
+                      family = "binomial")
+  
+  # predict
+  pred.glm.loocv <- predict.glm(fit.glm.loocv, dummy.mush[i, ], type = "response") > 0.5
+  pois <- dummy.mush[i, ]$poisonous == 1
+  if (pred.glm.loocv != pois)
+      mush.glm.loocv.err[i] <- 1
+}
+
+# error rate
+mush.glm.loocv.error <- mean(mush.glm.loocv.err)
+```
+
+```{r mush_glm_cv,echo=F,warning=F,message=F}
+# k-fold
+# set seed
+set.seed(seed)
+
+# Create 5 folds
+folds <- sample(1:k, nrow(dummy.mush), replace = T)
+
+# Create empty data frame to store error rates
+mush.err <- NULL
+
+# perform 5-fold cross validation
+for(i in 1:k){
+  # fit logistic regression
+  mush.glm.cv <- glm(poisonous ~ spore.print.color.h + spore.print.color.k +
+                      spore.print.color.n + spore.print.color.o +
+                      spore.print.color.u + spore.print.color.w +
+                      spore.print.color.y,
+                      data = dummy.mush[folds!=i,], family = binomial())
+  
+  # predict
+  prob.mush.glm.cv <- predict(mush.glm.cv, 
+                              dummy.mush[folds==i,],
+                              type="response")
+  pred.mush.glm.cv <- ifelse(prob.mush.glm.cv > 0.5, 1, 0)
+  
+  # calculate error and add to array
+  mush.err[i] <- mean(pred.mush.glm.cv != dummy.mush$poisonous[folds==i]) 
+}
+
+# display error rates
+kable(data.frame(mush.err),
+       caption = "Prediction Error Rates for 5-fold cv")
+
+# error rate
+mush.glm.cv.error <- mean(mush.err)
+```
+
+```{r mush_glm_err,echo=F,include=F,warning=F,message=F}
+mush.glm.col.err <- cbind("Logistic Regression", mush.glm.vsa.error, mush.glm.loocv.error, mush.glm.cv.error)
+mush.errors <- rbind(mush.glm.col.err)
+```
+
+## KNN
+
+Fitting KNN using the validation set approach, LOOCV, and 5-fold cross validation resulted in the error `too many ties in knn`.
+
+```{r mush_knn_vsa,echo=FALSE,warning=F,message=F}
+# # i
+# # validation set approach
+# # set seed
+# set.seed(seed)
+# 
+# # sample
+# rows <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.8)
+# #train.knn <- dummy.mush[rows, 2:ncol(dummy.mush)]
+# #test.knn <- dummy.mush[-rows, 2:ncol(dummy.mush)]
+# train.knn <- dummy.mush[rows, c(78:85)]
+# test.knn <- dummy.mush[-rows, c(78:85)]
+# train.class <- dummy.mush[rows, 1]
+# test.class <- dummy.mush[-rows, 1]
+# 
+# #which( colnames(dummy.mush)=="odor.c" ) 20
+# #which( colnames(dummy.mush)=="odor.y" ) 27
+# 
+# #which( colnames(dummy.mush)=="spore.print.color.h" ) #78
+# #which( colnames(dummy.mush)=="spore.print.color.y" ) #85
+# 
+# # fit knn
+# pred.mush.knn.vsa <- knn(train = data.frame(train.knn),
+#                          test = data.frame(test.knn),
+#                          cl = train.class, k = 1, use.all = T)
+# 
+# # confusion matrix
+# kable(table(pred.mush.knn.vsa, test.class),
+#       caption = "KNN Confusion Matrix")
+# 
+# # error rate
+# mush.knn.vsa.error <- mean(pred.mush.knn.vsa != test.class)
+```
+
+```{r mush_knn_loocv,echo=F,warning=F,message=F}
+# # ii
+# # LOOCV
+# # set seed
+# set.seed(seed)
+# 
+# # fit knn using loocv
+# pred.mush.knn.cv <- knn.cv(dummy.mush[, c(78:85)], dummy.mush[, 1], k = 1)
+# 
+# # confustion matrix
+# kable(table(pred.mush.knn.cv, dummy.mush[,1]),
+#       caption = "KNN Confusion Matrix")
+# 
+# # error rate
+# mush.knn.loocv.error <- mean(pred.mush.knn.cv != dummy.mush[,1])
+```
+
+```{r mush_knn_cv,echo=F,warning=F,message=F}
+# # iii
+# # k-fold
+# # set seed
+# set.seed(seed)
+# 
+# # Randomize data
+# permut.n <- sample(1:nrow(dummy.mush), nrow(dummy.mush))
+# # Create 6 equally sized folds
+# folds <- cbind(sort(rep(seq(1, 5, 1), 1625))[1:nrow(dummy.mush)], permut.n)
+# 
+# # Create empty data frame to store error rates
+# mush.err <- NULL
+# 
+# # perform 5-fold cross validation
+# for(i in 1:5){
+#   # segment the data by fold using the which() function 
+#   testIndexes <- which(folds == i, arr.ind = T)
+#   testData <- dummy.mush[testIndexes, c(20:27,78:85)]
+#   trainData <- dummy.mush[-testIndexes, c(20:27,78:85)]
+#   train.class <- dummy.mush[-testIndexes, 1]
+#   test.class <- dummy.mush[testIndexes, 1]
+#   
+#   pred.mush.knn <- knn(train = data.frame(trainData),
+#                       test = data.frame(testData),
+#                       cl = train.class, k = 1)
+#   
+#   mush.err[i] <- mean(pred.mush.knn != test.class)
+# }
+# 
+# # error rate
+# mush.knn.cv.error <- mean(mush.err)
+```
+
+```{r,echo=F,include=F,warning=F,message=F}
+#mush.knn.col.err <- cbind("KNN", mush.knn.vsa.error, mush.knn.loocv.error, mush.knn.cv.error)
+#mush.errors <- rbind(mush.errors, mush.knn.col.err)
+```
+
+## LDA
+
+```{r mush_lda_vsa,echo=FALSE,warning=F,message=F}
+# validation set approach
+# set seed
+set.seed(seed)
+
+# split into training and test
+mush.train.lda <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.6)
+mush.test.lda <- dummy.mush[-mush.train.lda, ]
+
+# fit model using linear discriminant analysis (LDA)
+fit.mush.lda.vsa <- lda(poisonous ~ spore.print.color.h + spore.print.color.k +
+                        spore.print.color.n + spore.print.color.o +
+                        spore.print.color.u + spore.print.color.w +
+                        spore.print.color.y, 
+                        data = dummy.mush,
+                        subset = mush.train.lda)
+
+# predict
+mush.lda.prob <- predict(fit.mush.lda.vsa, 
+                         newdata = mush.test.lda, 
+                         type = "response")
+
+# create confusion matrix
+kable(table(mush.test.lda$poisonous, mush.lda.prob$class),
+      caption = "LDA Confusion Matrix for vsa")
+
+# error rates
+mush.lda.vsa.error <- mean(mush.lda.prob$class != mush.test.lda$poisonous) 
+```
+
+```{r mush_lda_loocv,echo=FALSE,warning=F,message=F}
+# LOOCV
+# set seed
+set.seed(seed)
+
+# References: 
+# https://www.statmethods.net/advstats/discriminant.html
+# http://maths-people.anu.edu.au/~johnm/courses/mathdm/2008/pdf/r-exercisesVI.pdf
+# Retrieved: 03/02/18
+
+# fit model using LDA with LOOCV, CV = T option
+fit.mush.lda.loocv <- lda(poisonous ~ spore.print.color.h + spore.print.color.k +
+                          spore.print.color.n + spore.print.color.o +
+                          spore.print.color.u + spore.print.color.w +
+                          spore.print.color.y, 
+                          data = dummy.mush, CV = T)
+
+# create confusion matrix
+ct <- table(dummy.mush$poisonous, fit.mush.lda.loocv$class)
+kable(ct, caption = "LDA Confusion Matrix for LOOCV")
+
+# error rates
+mush.lda.loocv.error <- 1 - sum(diag(prop.table(ct)))
+```
+
+```{r mush_lda_cv,echo=F,warning=F,message=F}
+# k-fold
+# set seed
+set.seed(seed)
+
+# reference: https://stats.stackexchange.com/questions/61090/how-to-split-a-data-set-to-do-10-fold-cross-validation
+# retrieved: 03/02/18
+
+# Create 5 folds
+folds <- sample(1:k, nrow(dummy.mush), replace = T)
+
+# Create empty data frame to store error rates
+mush.err <- NULL
+
+# perform 5-fold cross validation
+for(i in 1:k){
+  # fit model using linear discriminant analysis (LDA)
+  fit.mush.lda.cv <- lda(poisonous ~ spore.print.color.h + spore.print.color.k +
+                          spore.print.color.n + spore.print.color.o +
+                          spore.print.color.u + spore.print.color.w +
+                          spore.print.color.y, 
+                          data = dummy.mush[folds!=i,])
+  
+  # predict
+  mush.prob <- predict(fit.mush.lda.cv, 
+                       dummy.mush[folds==i,], 
+                       type="response")
+  
+  # calculate error and add to array
+  mush.err[i] <- mean(mush.prob$class != dummy.mush$poisonous[folds==i])
+}
+
+# display error rates
+kable(data.frame(mush.err),
+       caption = "Prediction Error Rates for 5-fold cv")
+
+# error rate
+mush.lda.cv.error <- mean(mush.err)
+```
+
+```{r mush_lda_err,echo=F,include=F,warning=F,message=F}
+mush.lda.col.err <- cbind("LDA", mush.lda.vsa.error, mush.lda.loocv.error, mush.lda.cv.error)
+mush.errors <- rbind(mush.errors, mush.lda.col.err)
+```
+
+## QDA
+
+Fitting QDA using the validation set approach, LOOCV, and 5-fold cross validation resulted in the error `rank deficiency in group e`.  As mentioned in the previous homework, the rank deficiency in this context says there is insufficient information contained in the data to estimate the model.  Some variables are collinear and one or more covariance matrices cannot be inverted to obtain the estimates in the group.  More analysis is needed to determine which predictors to discard from the model.
+
+```{r mush_qda_vsa,echo=FALSE,warning=F,message=F}
+# # set seed reproducibility
+# set.seed(seed)
+# 
+# # split into training
+# rows <- sample(nrow(mushrooms), nrow(mushrooms)*0.6)
+# mush.train <- mushrooms[rows, ]
+# mush.test <- mushrooms[-rows, ]
+# 
+# # Reference: https://stats.stackexchange.com/questions/35071/what-is-rank-deficiency-and-how-to-deal-with-it
+# # Retrieved: 02/23/18
+# # fit model using linear discriminant analysis (LDA)
+# fit.mush.qda <- qda(class ~ spore.print.color, data = mush.train)
+# 
+# # predict
+# mush.qda.prob <- predict(fit.mush.qda, 
+#                           newdata = mush.test, 
+#                           type = "response")
+#  
+# # create confusion matrix
+# kable(table(mushrooms$class, mush.qda.prob$class),
+#        caption = "QDA Confusion Matrix")
+# 
+# # calculate rates
+# mush.qda.correct <- mean(mush.qda.prob$class == mushrooms$class)
+# mush.qda.error <- mean(mush.qda.prob$class != mushrooms$class) 
+```
+
+```{r mush_qda_loocv,echo=FALSE,warning=F,message=F}
+# # ii
+# # LOOCV
+# # set seed
+# set.seed(seed)
+# 
+# # Reference: https://www.statmethods.net/advstats/discriminant.html
+# # Retrieved: 03/02/18
+# 
+# # fit model using LDA with LOOCV
+# fit.mush.qda.loocv <- qda(class ~ spore.print.color, data = mushrooms, CV = T)
+# 
+# # create confusion matrix
+# ct <- table(mushrooms$class, fit.mush.qda.loocv$class)
+# kable(ct, caption = "QDA Confusion Matrix")
+# 
+# # error rates
+# mush.qda.vsa.error <- 1 - sum(diag(prop.table(ct)))
+```
+
+## MclustDA
+
+```{r mush_mclust_vsa,echo=F,warning=F,message=F}
+# validation set approach
+# set seed
+set.seed(seed)
+
+# split into training
+rows <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.6)
+mush.train <- dummy.mush[rows, ]
+mush.test <- dummy.mush[-rows, ]
+
+# fit model using MclustDA
+mush.fit.mclustda <-  MclustDA(mush.train[, c(78:85)], mush.train$poisonous)
+mush.mclustda.summary <- summary(mush.fit.mclustda, 
+                                 newdata = mush.test[, c(78:85)], 
+                                 newclass = mush.test$poisonous)
+
+# Predict
+mush.preds <- predict.MclustDA(mush.fit.mclustda, 
+                               mush.test[, c(78:85)])
+
+# print summary
+kable(rbind("Training" = mush.mclustda.summary[["err"]], 
+            "Test" = mush.mclustda.summary[["err.newdata"]]),
+      caption = "Error Rates")
+
+kable(mush.mclustda.summary[["tab"]],
+      caption = "Training Confusion Matrix")
+
+# kable(auto.mclustda.summary[["tab.newdata"]],
+#       caption = "Test Confusion Matrix")
+
+kable(table(mush.preds$classification, mush.test$poisonous),
+      caption = "Test Confusion Matrix")
+
+# calculate error rate
+mush.mclustda.vsa.err <- mean(mush.test$poisonous != mush.preds$classification)
+```
+
+```{r mush_mclust_loocv,echo=F,warning=F,message=F}
+# LOOCV
+# set seed
+set.seed(seed)
+
+# create for loop performing LOOCV
+mush.loocv.err <- rep(0, 100)
+for (i in 1:50) {
+  # fit model using MclustDA
+  mush.fit.mclustda <- MclustDA(dummy.mush[-i, c(78:85)], dummy.mush[-i, 1])
+
+  mush.mclustda.summary <- summary(mush.fit.mclustda, 
+                                   newdata = dummy.mush[i, c(78:85)], 
+                                   newclass = dummy.mush[i, 1])
+
+  mush.loocv.err[i] <-  mush.mclustda.summary[["err.newdata"]]
+}
+
+# error rate
+mush.mclustda.loocv.error <- mean(mush.loocv.err)
+```
+
+```{r mush_mclust_cv,echo=F,warning=F,message=F}
+# k-fold
+# set seed
+set.seed(seed)
+
+# reference: https://stats.stackexchange.com/questions/61090/how-to-split-a-data-set-to-do-10-fold-cross-validation
+# retrieved: 03/02/18
+
+# Create folds
+folds <- sample(1:k, nrow(dummy.mush), replace = T)
+
+# Create empty data frame to store error rates
+mush.err <- NULL
+
+# perform 5-fold cross validation
+for(i in 1:k){
+  # segment the data by fold using the which() function 
+  testIndexes <- which(folds == i, arr.ind = T)
+
+  trainData <- dummy.mush[-testIndexes, c(78:85)]
+  testData <- dummy.mush[testIndexes, c(78:85)]
+  train.class <- dummy.mush[-testIndexes, 1]
+  test.class <- dummy.mush[testIndexes, 1]
+
+  # fit model using MclustDA
+  mush.fit.mclustda <- MclustDA(trainData, train.class)
+
+  mush.mclustda.summary <- summary(mush.fit.mclustda, 
+                                   newdata = testData, 
+                                   newclass = test.class)
+
+  mush.err[i] <-  mush.mclustda.summary[["err.newdata"]]
+}
+
+# error rate
+mush.mclustda.cv.error <- mean(mush.err)
+```
+
+```{r mush_mclust_err,echo=F,include=F,warning=F,message=F}
+mush.mclustda.col.err <- cbind("MclustDA", mush.mclustda.vsa.err, mush.mclustda.loocv.error, mush.mclustda.cv.error)
+mush.errors <- rbind(mush.errors, mush.mclustda.col.err)
+```
+
+```{r mush_cvmclust,echo=F,warning=F,message=F}
+# Refrence: https://rdrr.io/cran/mclust/man/cvMclustDA.html
+# Retrieved: 03/09/18
+
+# set seed
+# set.seed(seed)
+# 
+# mush.train <- dummy.mush[, c(78:85)]
+# mush.class <- dummy.mush[, 1]
+# 
+# mushMclustDA <- MclustDA(mush.train, mush.class)
+# 
+# # LOOCV
+# mushloocv <- cvMclustDA(mushMclustDA, nfold = 100) 
+# mushloocv[c("error", "se")] 
+# 
+# # 5-fold CV
+# mush5fold <- cvMclustDA(mushMclustDA, nfold = 5) 
+# mush5fold[c("error", "se")] 
+```
+
+
+## MclustDA EDDA
+
+```{r mush_mclust_edda_vsa,echo=F,warning=F,message=F}
+# validation set approach
+# set seed
+set.seed(seed)
+
+# split into training
+rows <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.6)
+mush.train <- dummy.mush[rows, ]
+mush.test <- dummy.mush[-rows, ]
+
+# fit model using MclustDA type EDDA
+mush.fit.mclustda.edda <-  MclustDA(mush.train[, c(78:85)], 
+                                    mush.train$poisonous, 
+                                    modelType = "EDDA")
+
+mush.mclustda.edda.summary <- summary(mush.fit.mclustda.edda, 
+                                      newdata = mush.test[, c(78:85)], 
+                                      newclass = mush.test$poisonous)
+
+mush.preds <- predict.MclustDA(mush.fit.mclustda.edda, 
+                               mush.test[, c(78:85)])
+
+# print summary
+kable(rbind("Training" = mush.mclustda.edda.summary[["err"]], 
+            "Test" = mush.mclustda.edda.summary[["err.newdata"]]),
+      caption = "Error Rates")
+
+kable(mush.mclustda.edda.summary[["tab"]],
+      caption = "Training Confusion Matrix")
+
+# kable(auto.mclustda.summary[["tab.newdata"]],
+#       caption = "Test Confusion Matrix")
+
+kable(table(mush.preds$classification, mush.test$poisonous),
+      caption = "Test Confusion Matrix")
+
+# calculate error rate
+mush.mclustda.edda.vsa.err <- mean(mush.test$poisonous != mush.preds$classification)
+```
+
+```{r mush_mclust_edda_loocv,echo=F,warning=F,message=F}
+# LOOCV
+# set seed
+set.seed(seed)
+
+# create for loop performing LOOCV
+mush.loocv.err <- rep(0, 100)
+for (i in 1:50) {
+  # fit model using MclustDA type EDDA
+  mush.fit.mclustda.edda <- MclustDA(dummy.mush[-i, c(78:85)], 
+                                     dummy.mush[-i, 1],
+                                     modelType = "EDDA")
+
+  mush.mclustda.edda.summary <- summary(mush.fit.mclustda.edda, 
+                                        newdata = dummy.mush[i, c(78:85)], 
+                                        newclass = dummy.mush[i, 1])
+
+  mush.loocv.err[i] <- mush.mclustda.edda.summary[["err.newdata"]]
+}
+
+# error rate
+mush.mclustda.edda.loocv.error <- mean(mush.loocv.err)
+```
+
+```{r mush_mclust_edda_cv,echo=F,warning=F,message=F}
+# k-fold
+# set seed
+set.seed(seed)
+
+# reference: https://stats.stackexchange.com/questions/61090/how-to-split-a-data-set-to-do-10-fold-cross-validation
+# retrieved: 03/02/18
+
+# Create folds
+folds <- sample(1:k, nrow(dummy.mush), replace = T)
+
+# Create empty data frame to store error rates
+mush.err <- NULL
+
+# perform 5-fold cross validation
+for(i in 1:k){
+  # segment the data by fold using the which() function 
+  testIndexes <- which(folds == i, arr.ind = T)
+
+  trainData <- dummy.mush[-testIndexes, c(78:85)]
+  testData <- dummy.mush[testIndexes, c(78:85)]
+  train.class <- dummy.mush[-testIndexes, 1]
+  test.class <- dummy.mush[testIndexes, 1]
+
+  # fit model using MclustDA type EDDA
+  mush.fit.mclustda.edda <- MclustDA(trainData, 
+                                     train.class, 
+                                     modelType = "EDDA")
+
+  mush.mclustda.edda.summary <- summary(mush.fit.mclustda.edda, 
+                                   newdata = testData, 
+                                   newclass = test.class)
+  
+  mush.preds <- predict.MclustDA(mush.fit.mclustda.edda, 
+                                 testData)
+  
+  #tbl <- table(mush.preds$classification, test.class)
+  #mush.err[i] <- 1-((tbl[1, 1]+tbl[2, 2])/sum(tbl))
+
+  mush.err[i] <-  mush.mclustda.edda.summary[["err.newdata"]]
+}
+
+# error rate
+mush.mclustda.edda.cv.error <- mean(mush.err)
+```
+
+```{r mush_mclust_edda_err,echo=F,include=F,warning=F,message=F}
+mush.mclustda.edda.col.err <- cbind("MclustDA EDDA", mush.mclustda.edda.vsa.err, mush.mclustda.edda.loocv.error, mush.mclustda.edda.cv.error)
+mush.errors <- rbind(mush.errors, mush.mclustda.edda.col.err)
+```
+
+## SVM
+
+```{r mush_svm_vsa,echo=F,warning=F,message=F}
+# validation set approach
+# set seed
+set.seed(seed)
+
+# split into training and test
+mush.train <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.6)
+mush.test <- dummy.mush[-mush.train, ]
+
+# fit logistic regression
+fit.mush.svm.vsa <- svm(poisonous ~ spore.print.color.h + spore.print.color.k +
+                        spore.print.color.n + spore.print.color.o +
+                        spore.print.color.u + spore.print.color.w +
+                        spore.print.color.y,
+                        data = dummy.mush,
+                        family = binomial(), subset = mush.train)
+
+# predict
+prob.mush.svm.vsa <- predict(fit.mush.svm.vsa, mush.test)
+pred.mush.svm.vsa <- ifelse(prob.mush.svm.vsa > 0.5, 1, 0)
+
+# confusion matrix
+kable(table("Pred."=pred.mush.svm.vsa, "Actual"=mush.test$poisonous),
+      caption = "Confusion Matrix for vsa")
+
+# error rate
+mush.svm.vsa.error <- mean(pred.mush.svm.vsa != mush.test$poisonous)
+```
+
+```{r mush_svm_loocv,echo=F,warning=F,message=F}
+# LOOCV
+# set seed
+set.seed(seed)
+
+# create for loop performing LOOCV
+mush.loocv.err <- rep(0, 100)
+for (i in 1:100) {
+  # fit logistic regression
+  fit.svm.loocv <- svm(poisonous ~ spore.print.color.h + spore.print.color.k +
+                      spore.print.color.n + spore.print.color.o +
+                      spore.print.color.u + spore.print.color.w +
+                      spore.print.color.y,
+                      data = dummy.mush[-i, ])
+  
+  # predict
+  pred.glm <- predict(fit.svm.loocv, dummy.mush[i, ]) > 0.5
+  pois <- dummy.mush[i, ]$poisonous == 1
+  if (pred.glm != pois)
+      mush.loocv.err[i] <- 1
+}
+
+# error rate
+mush.svm.loocv.error <- mean(mush.loocv.err)
+```
+
+```{r mush_svm_cv,echo=F,warning=F,message=F}
+# k-fold
+# set seed
+set.seed(seed)
+
+# Create 5 folds
+folds <- sample(1:k, nrow(dummy.mush), replace = T)
+
+# Create empty data frame to store error rates
+mush.err <- NULL
+
+# perform 5-fold cross validation
+for(i in 1:k){
+  # fit logistic regression
+  mush.svm.cv <- svm(poisonous ~ spore.print.color.h + spore.print.color.k +
+                      spore.print.color.n + spore.print.color.o +
+                      spore.print.color.u + spore.print.color.w +
+                      spore.print.color.y,
+                      data = dummy.mush[folds!=i,])
+  
+  # predict
+  prob.mush.svm.cv <- predict(mush.svm.cv, 
+                              dummy.mush[folds==i,],
+                              type="response")
+  pred.mush.svm.cv <- ifelse(prob.mush.svm.cv > 0.5, 1, 0)
+  
+  # calculate error and add to array
+  mush.err[i] <- mean(pred.mush.svm.cv != dummy.mush$poisonous[folds==i]) 
+}
+
+# display error rates
+kable(data.frame(mush.err),
+      caption = "Prediction Error Rates for 5-fold cv")
+
+# error rate
+mush.svm.cv.error <- mean(mush.err)
+```
+
+```{r mush_svm_err,echo=F,include=F,warning=F,message=F}
+mush.svm.col.err <- cbind("SVM", mush.svm.vsa.error, mush.svm.loocv.error, mush.svm.cv.error)
+mush.errors <- rbind(mush.errors, mush.svm.col.err)
+```
+
+## Summary Results
+
+We can see from the summary that the test error rates are fairly close however, using 5-fold cross validation with MclustDA seems to result in the lowest error rate.  Due to the computational intensity, LOOCV was unable to fit all $8124$ observations to give an accurate result.  A sampling of 100 observations for each method results in an error rate of $0$ for McLustDA, and $0.16$ for Logistic Regression and SVM, which could be wrong since all of the observations were not used.
+
+```{r mush_summ_err,echo=F,warning=F,message=F}
+colnames(mush.errors) <- c("Method", "VSA", "LOOCV", "5-Fold CV")
+kable(mush.errors, digits = 6,
+      caption = "Test Errors for different methods")
+
+# References
+#https://stackoverflow.com/questions/9666212/how-to-compute-error-rate-from-a-decision-tree
+#https://stats.stackexchange.com/questions/27351/compare-models-loccv-implementation-in-r
+# Retrieved: 03/07/18
+```
+
+
+

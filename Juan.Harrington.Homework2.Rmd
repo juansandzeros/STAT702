@@ -1,0 +1,464 @@
+---
+title: "Homework 2"
+author: "Juan Harrington"
+date: "January 23, 2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# load libraries
+library(MASS)
+library(ISLR)
+library(ggplot2)
+library(knitr)
+library(broom)
+library(gridExtra)
+
+# seed # for reproducibility
+seed <- 13579
+```
+
+# Question 3.7.5 
+
+```{r,include=FALSE,warning=F,message=F}
+# I had help from Alvin Bahr on this question
+# since it has been over 20 years since I had Algebra etc
+# I also used the following reference.
+# Reference: http://www.hec.ca/en/cam/help/topics/The_summation_symbol.pdf
+# Retrieved: 01/20/2018
+```
+
+Consider the fitted values that result from performing linear regression without
+an intercept. In this setting the ith fitted value takes the form
+
+$$\hat{y}_{i}=x_{i}\hat{\beta}$$
+
+where
+
+$$\hat{\beta}=\dfrac{\sum_{i'=1}^{n}x_i\prime{y_i}\prime}{\sum_{j=1}^{n}x^2_j}$$
+
+Show that we can write this as
+
+$$\hat{y_i}=\sum_{i\prime=1}^{n}{a_i}\prime{y_i}\prime$$
+
+What is $a_i\prime$?
+
+The first thing we do is substitute $\hat{\beta}=\dfrac{\sum_{i'=1}^{n}x_i\prime{y_i}\prime}{\sum_{j=1}^{n}x^2_j}$ into the equation $\hat{y}_{i}=x_{i}\hat{\beta}$ so that we get
+
+$$\hat{y_i}={x_i}\dfrac{\sum_{i'=1}^{n}x_i\prime{y_i}\prime}{\sum_{j=1}^{n}x^2_j}$$
+
+Then combine the two sums that have same index into one
+
+$$\hat{y_i}={x_i}\sum_{i\prime=1}^{n}\dfrac{{x_i}\prime{y_i}\prime}{x^2_i\prime}$$
+
+Next, $x_i\prime$ can be reduced in the numerator and $x^2_i\prime$ in the denominator to form
+
+$$\hat{y_i}=\sum_{i\prime=1}^{n}{x_i}\dfrac{y_i\prime}{x_i\prime}$$
+
+This implies that $a_i\prime$ is equal to $x_i(\dfrac{1}{x_i\prime})$, therefore we can write it as:
+
+$$\hat{y}=\sum_{i\prime=1}^{n}a_i\prime{y_i\prime}$$
+
+# Question 3.7.10 
+
+The `Carseats` dataset from the `ISLR` library simulates the sales of child car seats from 400 different stores.  It contains 11 variables.
+
+  * Sales: unit sales in thousands at each location
+  * CompPrice: price charged by competitor at each location
+  * Income: community income level in thousands of dollars
+  * Advertising: local advertising budget at each location in thousands of dollars
+  * Population: population size in region in thousands
+  * Price: price for car seats at each site
+  * ShelveLoc: Bad, Good, or Medium indicates quality of the shelving location
+  * Age: average age level of the population
+  * Education: education level at location
+  * Urban: Yes/No factor to indicate whether the store is in an urban or rural location
+  * US: Yes/No factor to indicate whether the store is in the US or not
+
+```{r,include=FALSE,warning=F,message=F}
+# load carseats data from ISLR
+data("Carseats", package = "ISLR")
+```
+
+## Part a 
+
+A multiple regression model is fitted to predict `Sales` using `Price`, `Urban`, and `US` variables.
+
+```{r,echo=F,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+# fit linear regression on Carseats for the variables: Price, Urban, and US
+lm.10.1 = lm(Sales ~ Price + Urban + US, data = Carseats)
+#summary(lm.10.1)
+kable(tidy(lm.10.1),
+      caption = "Linear Regression Summary Statistics")
+```
+
+## Part b
+
+Price is a number the company charges for car seats at each site.  Urban location is a factor indicating whether the store is an urban or rural location, using a Yes(1) for urban and No(0) for non-urban.  US is a factor indicating whether the store is in the US or not, using Yes(1) for US and No(0) for not.
+
+Interpreting the coefficients in the model we can conclude that the average effect of a price increase of 1 dollar is a decrease of 54.459 units in sales being that all other predictors remain fixed. The coefficient of the `Urban` variable may be interpreted by saying that on average the unit sales in urban location are 21.916 units less than in rural location all other predictors remaining fixed. The coefficient of the `US` variable may be interpreted by saying that on average the unit sales in a US store are 1200.573 units more than in a non US store all other predictors remaining fixed.
+
+## Part c
+
+The model can be written out in equation form, being careful to handle the qualitative variables properly, like so.
+
+$Sales = 13.043469 - 0.054459 * Price - 0.021916 * UrbanYes + 1.200573 * USYes$
+
+## Part d
+
+The null hypothesis $H0 : Bj = 0$ can be rejected for the `Price` and `US` variables because their p-values are small indicating statistical significance.
+
+## Part e
+
+On the basis of the response to the previous question, a smaller model is fit that only uses the predictors for which there is evidence of association with the outcome.
+
+```{r,echo=F,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+# fit smaller linear regression model
+lm.10.2 = lm(Sales ~ Price + US, data = Carseats)
+#summary(lm.10.2)
+kable(tidy(lm.10.2),
+      caption = "Linear Regression Summary Statistics")
+```
+
+## Part f
+
+The $R^2$ for the smaller model (a) is slightly better than for the larger model (e). Roughly 23.93% of the variability is explained by the model.  Additionally, the AIC is slightly better on the smaller model.  However,  when looking at the Anova comparison between the models we see a low F-value and higher p-value indicating that the two models fit the data pretty equally.
+
+```{r,echo=F,warning=F,message=F}
+# using glance to get r-squares, aic, and bic from model statistics
+g1 <- glance(lm.10.1)
+g1$model <- "All Variables"
+
+g2 <- glance(lm.10.2)
+g2$model <- "Smaller Model"
+
+df <- rbind(g1, g2)
+kable(df[ ,c("model", "r.squared", "AIC", "BIC")],
+      caption = "Comparison between Models (a) and (e)")
+
+kable(anova(lm.10.1,lm.10.2),
+      caption = "Anova comparison between Models (a) and (e)") 
+```
+
+## Part g
+
+```{r,echo=F,warning=F,message=F}
+kable(confint(lm.10.2),
+      caption = "Confidence Intervals for Coefficients of the Smaller Model")
+```
+
+## Part h
+
+Looking at the Q-Q plot the circles lie close to the line indicating data comes from a normal distribution with no evidence of outliers or high leverage observations in the model from (e).  Also, we can see that the studentized residual values are between -3 and 3 which indicates that there are no outliers.  Moreover, the residuals plot show no discernible pattern which also indicates linearity in the data.
+
+```{r,echo=F,warning=F,message=F}
+# check for evidence of outliers
+# standard plot
+par(mfrow=c(2,2))
+plot(lm.10.2)
+
+# reset par to default
+par(mfrow=c(1,1))
+# studentized residuals to check for outliers
+plot(predict(lm.10.2), rstudent(lm.10.2),
+     xlab = "Fitted", ylab = "Studentized Residuals",
+     main = "Studentized Residuals vs Fitted")
+
+# ggplot
+# reference: http://ggplot2.tidyverse.org/reference/fortify.lm.html
+# and https://rpubs.com/therimalaya/43190
+# retrieved: 1/20/2018
+
+# fitted vs standardized residuals 
+p1 <- ggplot(lm.10.2, aes(.fitted, .resid)) +
+      geom_point() +
+      geom_hline(yintercept = 0) +
+      geom_smooth(se = F) +
+      labs(x = "Fitted Values", y = "Residuals", 
+           title = "Residuals vs Fitted") 
+
+# qqplot of residuals vs normal
+p2 <- ggplot(lm.10.2, aes(sample=.stdresid)) + 
+      stat_qq() + geom_abline() +
+      labs(x = "Theoretical Quantiles", y = "Standardized Residuals", 
+           title = "Normal Q-Q") 
+
+# fitted vs scaled residuals
+p3 <- ggplot(lm.10.2, aes(.fitted, sqrt(abs(.stdresid)))) +
+      geom_point() +
+      geom_smooth(se = F) +
+      labs(x = "Fitted Values", 
+           title = "Scale-Location") + 
+      ylab(expression(sqrt("Standardized residuals"))) 
+
+# residuals vs leverage cooks distance
+p4 <- ggplot(lm.10.2, aes(.hat, .stdresid)) +
+      geom_point(aes(size = .cooksd)) +
+      geom_smooth(se = F, size = 0.5) +
+      theme(legend.position="none") +
+      labs(x = "Leverage", y = "Standardized Residuals", 
+           title = "Residuals vs Leverage")
+
+# studentized residuals vs fitted
+p5 <- ggplot(lm.10.2, aes(.fitted, rstudent(lm.10.2))) +
+      geom_point() +
+      geom_smooth(se = F) +
+      theme(legend.position="none") +
+      labs(x = "Fitted", y = "Studentized Residuals", 
+           title = "Studentized Residuals vs Fitted")
+
+grid.arrange(p1, p2, p3, p4, ncol = 2, top = "Diagnostic Plots")
+p5 # plot indicates no outliers because studentized residual values are between -3 and 3.
+
+```
+
+# Question 3.7.15 
+
+The `Boston` dataset from the `MASS` package contains 506 observations and 14 variables for median housing values in the suburbs of Boston.  
+
+  * crim: per capita crime rate by town
+  * zn: proportion of residential land zoned for lots over 25,000 sq ft
+  * indus: proportion of non-retail business acres per town
+  * chas: Charles River dummy variable (1 if tract bounds river; 0 otherwise)
+  * nox: nitrogen oxides concentration in parts per 10 million
+  * rm: average number of rooms per dwelling
+  * age: proportion of owner-occupied units built prior to 1940
+  * dis: weighted mean of distances to five Boston employment centres
+  * rad: index of accessibility to radial highways
+  * tax: full-value property-tax rate per $10,000
+  * ptratio: pupil-teacher ratio by town
+  * black: 1000(Bk - 0.63)^2 where Bk is the proportion of blacks by town
+  * lstat: lower status of the population in percent
+  * medv: median value of owner-occupied homes in thousands
+
+```{r,include=FALSE,warning=F,message=F}
+# load boston data from MASS
+data("Boston", package = "MASS")
+#head(Boston)
+```
+
+## Part a
+
+Fitting a simple linear regression model for each variable to predict the response we determine that all of the variables except for `chas` indicates a significance in predicting the response based on their small p-values.  
+
+```{r,echo=F,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+fit.15.zn <- lm(crim ~ zn, data = Boston)
+#summary(fit.15.zn)
+kable(tidy(fit.15.zn))
+
+fit.15.indus <- lm(crim ~ indus, data = Boston)
+#summary(fit.15.indus)
+kable(tidy(fit.15.indus))
+
+fit.15.chas <- lm(crim ~ chas, data = Boston)
+#summary(fit.15.chas)
+kable(tidy(fit.15.chas))
+
+fit.15.nox <- lm(crim ~ nox, data = Boston)
+#summary(fit.15.nox)
+kable(tidy(fit.15.nox))
+
+fit.15.rm <- lm(crim ~ rm, data = Boston)
+#summary(fit.15.rm)
+kable(tidy(fit.15.rm))
+
+fit.15.age <- lm(crim ~ age, data = Boston)
+#summary(fit.15.age)
+kable(tidy(fit.15.age))
+
+fit.15.dis <- lm(crim ~ dis, data = Boston)
+#summary(fit.15.dis)
+kable(tidy(fit.15.dis))
+
+fit.15.rad <- lm(crim ~ rad, data = Boston)
+#summary(fit.15.rad)
+kable(tidy(fit.15.rad))
+
+fit.15.tax <- lm(crim ~ tax, data = Boston)
+#summary(fit.15.tax)
+kable(tidy(fit.15.tax))
+
+fit.15.ptratio <- lm(crim ~ ptratio, data = Boston)
+#summary(fit.15.ptratio)
+kable(tidy(fit.15.ptratio))
+
+fit.15.black <- lm(crim ~ black, data = Boston)
+#summary(fit.15.black)
+kable(tidy(fit.15.black))
+
+fit.15.lstat <- lm(crim ~ lstat, data = Boston)
+#summary(fit.15.lstat)
+kable(tidy(fit.15.lstat))
+
+fit.15.medv <- lm(crim ~ medv, data = Boston)
+#summary(fit.15.medv)
+kable(tidy(fit.15.medv))
+
+```
+
+```{r,echo=F,warning=F,message=F}
+# standard plot
+par(mfrow=c(2,2))
+plot(Boston$zn, Boston$crim,
+     xlab = "zn", ylab = "crim")
+abline(fit.15.zn, col="red", lwd=3)
+
+plot(Boston$indus, Boston$crim,
+     xlab = "indus", ylab = "crim")
+abline(fit.15.indus, col="red", lwd=3)
+
+plot(Boston$chas, Boston$crim,
+     xlab = "chas", ylab = "crim")
+abline(fit.15.chas, col="red", lwd=3)
+
+plot(Boston$rm, Boston$crim,
+     xlab = "rm", ylab = "crim")
+abline(fit.15.rm, col="red", lwd=3)
+
+# gplot
+p1 <- ggplot(Boston, aes(zn, crim)) + geom_point() +
+  geom_smooth(method = "lm", se = F)
+
+p2 <- ggplot(Boston, aes(indus, crim)) + geom_point() +
+  geom_smooth(method = "lm", se = F)
+
+p3 <- ggplot(Boston, aes(chas, crim)) + geom_point() +
+  geom_smooth(method = "lm", se = F)
+
+p4 <- ggplot(Boston, aes(rm, crim)) + geom_point() +
+  geom_smooth(method = "lm", se = F)
+
+grid.arrange(p1, p2, p3, p4, ncol = 2, top = "Scatterplots")
+```
+
+## Part b
+
+A mutliple regression model is fit to predict the response using all of the predictors.  The null hypothesis $H0 : Bj = 0$ can be rejected for the variables `zn`, `dis`, `rad`, `black`, and `medv` because their p-values are statistically significant.
+
+```{r,echo=F,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+# fit multiple regression using all predictors
+fit.15.all <- lm(crim ~ ., data = Boston)
+#summary(fit.15.all)
+kable(tidy(fit.15.all))
+```
+
+## Part c
+
+Comparing the results of the two models there seems to be fewer predictors having a statistically significant impact when there is presence of other predictors.  Also, the `nox` variable has a high coefficient in each model.  We can see this when plotting the coefficients for both the univariate regression and multiple regression models.
+
+```{r,echo=F,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# create data for coefficient of models
+uni.coef <- c(coef(fit.15.zn)[2],
+              coef(fit.15.indus)[2],
+              coef(fit.15.chas)[2],
+              coef(fit.15.nox)[2],
+              coef(fit.15.rm)[2],
+              coef(fit.15.age)[2],
+              coef(fit.15.dis)[2],
+              coef(fit.15.rad)[2],
+              coef(fit.15.tax)[2],
+              coef(fit.15.ptratio)[2],
+              coef(fit.15.black)[2],
+              coef(fit.15.lstat)[2],
+              coef(fit.15.medv)[2])
+multi.coef <- coef(fit.15.all)[-1] #discard intercept
+
+# tables of coefficients for each regression
+kable(uni.coef, col.names = c("Coefficients"),
+      caption = "Univariate regresion coefficients")
+
+kable(multi.coef, col.names = c("Coefficients"),
+      caption = "Multiple regresion coefficients")
+
+# standard plot
+plot(uni.coef, multi.coef,
+     main = "Univariate vs. Multiple Regression Coefficients", 
+     xlab = "Univariate", ylab = "Multiple")
+
+# ggplot
+qplot(x=uni.coef, y=multi.coef,
+     main = "Univariate vs. Multiple Regression Coefficients", 
+     xlab = "Univariate", ylab = "Multiple")
+```
+
+## Part d
+
+By fitting a model of the form $Y = B0 + B1X + B2X^2 + B3X^3 + \epsilon$ for each predictor we determine that for the variables `zn`, `rm`, `rad`, `tax`, and `lstat` the p-values suggest the cubic coefficient is not statistically significant but the p-values for their quadratic cefficients are significant.  The variables `indus`, `nox`, `age`, `dis`, `ptratio`, and `medv` have small p-values for both quadratic and cubic coefficients indicating statistical significance.  For the `black` variable both the quadratic and cubic coefficients are not statistically significant.  This leads to the conclusion that all variables except `black` have non linearity.  Furthermore, the `chas` variable was not included because it is a binary (0/1) factor dummy variable and does not make sense to use with a non-linear effect like polynomial.
+
+```{r,echo=F,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+fit.15.zn <- lm(crim ~ poly(zn, 3), data = Boston)
+#summary(fit.15.zn)
+kable(tidy(fit.15.zn))
+
+fit.15.indus <- lm(crim ~ poly(indus, 3), data = Boston)
+#summary(fit.15.indus)
+kable(tidy(fit.15.indus))
+
+# chas is a factor dummy variable causing error in poly
+# 'poly'degree' must be less than number of unique point calls.
+#fit.15.chas <- lm(crim ~ poly(chas, 3), data = Boston)
+#summary(fit.15.chas)
+#kable(tidy(fit.15.chas))
+
+fit.15.nox <- lm(crim ~ poly(nox, 3), data = Boston)
+#summary(fit.15.nox)
+kable(tidy(fit.15.nox))
+
+fit.15.rm <- lm(crim ~ poly(rm, 3), data = Boston)
+#summary(fit.15.rm)
+kable(tidy(fit.15.rm))
+
+fit.15.age <- lm(crim ~ poly(age, 3), data = Boston)
+#summary(fit.15.age)
+kable(tidy(fit.15.age))
+
+fit.15.dis <- lm(crim ~ poly(dis, 3), data = Boston)
+#summary(fit.15.dis)
+kable(tidy(fit.15.dis))
+
+fit.15.rad <- lm(crim ~ poly(rad, 3), data = Boston)
+#summary(fit.15.rad)
+kable(tidy(fit.15.rad))
+
+fit.15.tax <- lm(crim ~ poly(tax, 3), data = Boston)
+#summary(fit.15.tax)
+kable(tidy(fit.15.tax))
+
+fit.15.ptratio <- lm(crim ~ poly(ptratio, 3), data = Boston)
+#summary(fit.15.ptratio)
+kable(tidy(fit.15.ptratio))
+
+fit.15.black <- lm(crim ~ poly(black, 3), data = Boston)
+#summary(fit.15.black)
+kable(tidy(fit.15.black))
+
+fit.15.lstat <- lm(crim ~ poly(lstat, 3), data = Boston)
+#summary(fit.15.lstat)
+kable(tidy(fit.15.lstat))
+
+fit.15.medv <- lm(crim ~ poly(medv, 3), data = Boston)
+#summary(fit.15.medv)
+kable(tidy(fit.15.medv))
+
+```
+
+

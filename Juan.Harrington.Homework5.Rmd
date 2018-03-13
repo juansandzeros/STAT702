@@ -1,0 +1,427 @@
+---
+title: "Homework 5"
+author: "Juan Harrington"
+date: "February 20, 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# load libraries
+library(ISLR)
+library(knitr)
+library(mclust)
+library(ggplot2)
+library(gridExtra)
+library(vcd)
+library(RColorBrewer)
+
+# seed # for reproducibility
+seed <- 13579
+```
+
+# Question 4.7.6 
+
+Suppose we collect data for a group of students in a statistics class with variables $X_1$ = hours studied, $X_2$ = undergrad GPA, and $Y$ = receive an A.  We fit a logistic regression and produce estimated coefficients $\hat{B}_0$ = -6, $\hat{B}_1$ = 0.05, and $\hat{B}_2$ = 1.
+
+## Part a
+
+We can use the formula for logistic regression from figure (4.2), altering it slightly because our example has two predictors instead of one. 
+
+$$ \hat{p}(x) = \frac{e^{\hat{\beta_{0}} + \hat{\beta_{1}}X_1 + \hat{\beta_{2}}X_2}}{1 + e^{\hat{\beta_{0}} + \hat{\beta_{1}}X_1 + \hat{\beta_{2}}X_2}} $$
+Plugging in the values for $B_0$, $B_1$, and $B_2$, along with $X_1$ and $X_2$, to estimate the probability that a student who studies 40 hours and has an undergrad GPA of 3.5 gets and A in the class.
+
+$$ \hat{p}(x) = \frac{exp(-6+0.05*40+1*3.5)}{1+exp(-6+0.05*40+1*3.5)} $$
+Solving, results in a $37.75$ percent chance the student would receive an A.
+
+```{r,echo=F,include=FALSE,warning=F,message=F}
+#exp(-6+0.05*40+1*3.5)/(1+exp(-6+0.05*40+1*3.5))
+```
+
+## Part b
+
+To predict how many hours the student in part (a) would need to study to have a 50 percent chance of getting an A in the class, we can we can use the same formula as above (4.2), to solve for $X_1$.
+
+$$ \hat{p}(x) = \frac{e^{\hat{\beta_{0}} + \hat{\beta_{1}}X_1 + \hat{\beta_{2}}X_2}}{1 + e^{\hat{\beta_{0}} + \hat{\beta_{1}}X_1 + \hat{\beta_{2}}X_2}} $$
+We let $p(X)$ = .5 to indicate a probability of 50 percent getting an A, and plug in the values for $B_0$, $B_1$, and $B_2$, and $X_2$ of 3.5.
+
+$$ 0.50 = \frac{exp(-6+0.05*X_1+1*3.5)}{1+exp(-6+0.05*X_1+1*3.5)} $$
+
+Which is equivelant to solving the log odds (logit) function (4.25)
+
+$$ log(\frac{0.50}{1-0.50}) = -6 + 0.05X_1 + 3.5 $$
+
+Simplifying, results in $X_1$ = 50 hours.  Therefore, a student would need to study for 50 hours with an undergrad GPA of 3.5 to have a 50 percent chance of getting an A in the statistics class.
+
+```{r,echo=F,include=FALSE,warning=F,message=F}
+# References: http://logisticregressionanalysis.com/910-how-to-solve-the-logistic-regression-equation-for-the-probability-p/
+# Retrieved: 2/14/18
+#(log(0.5/(1-0.5)) + 6 - 3.5)/0.05
+```
+
+# Question 4.7.7 
+
+By using the Bayes Classifier where $X$ follows a normal distribution with constant variance, we can use the formula from figure 4.12.
+
+$$ p_k(x) = \frac {\pi_k \frac {1} {\sqrt{2 \pi} \sigma} \exp(- \frac {1} {2 \sigma^2} (x - \mu_k)^2) } {\sum { \pi_l \frac {1} {\sqrt{2 \pi} \sigma} \exp(- \frac {1} {2 \sigma^2} (x - \mu_l)^2) }}$$
+
+$$ p_{yes}(x)= \frac {\pi_{yes}\exp(- \frac {1} {2 \sigma^2}  (x - \mu_{yes})^2)}{\sum {\pi_l\exp(- \frac {1} {2 \sigma^2} (x - \mu_l)^2)}} $$
+
+We can evaluate by plugging in the values of $\pi_{yes}$ = 0.80, $\sigma^2$ = 36, $x$ = 4, $\mu_{yes}$ = 10, and $\pi_{l}$ = 0.20 for "No", to become
+
+$$ p_{yes}(4) = \frac {0.80 \exp(- \frac {1} {2 * 36} (4 - 10)^2)} {0.80 \exp(- \frac {1} {2 * 36} (4 - 10)^2) + 0.20 \exp(- \frac {1} {2 * 36} 4^2)} $$
+
+Which calculates the probability at a $75.2$ percent chance that a company will issue a dividend this year given that $X$ = 4.
+
+```{r,echo=F,include=FALSE,warning=F,message=F}
+#(0.8*exp(-1/(2*36)*(4-10)^2))/(0.8*exp(-1/(2*36)*(4-10)^2)+(1-0.8)*exp(-1/(2*36)*(4-0)^2))
+```
+
+# 3  
+
+```{r,echo=F,include=FALSE,warning=F,message=F}
+# load weekly data from ISLR
+data("Weekly", package = "ISLR")
+
+# create training data (from 1990-2008)
+weekly.train <- subset(Weekly, Year > 1989 & Year < 2009)
+weekly.test <- subset(Weekly, Year > 2008)
+```
+
+## Part i
+
+Fitting `MclustDA` on the `Weekly` dataset from `ISLR`, using the variable `Lag2` as the predictor, the training error is $0.4416244$ and the test error is $0.4519231$.  The best model selected is variable variance (one-dimensional) for a univariate mixture with a BIC of $-4327.804$.  The true positive rate is $87.13$ percent and the true negative rate is $17.23$ percent for the training set.  The true positive rate is $57.78$ percent and the true negative rate is $35.71$ percent for the test set.  An interesting side note is the test error from the model summary reports $0.4134615$ however when manually calculating the error rate from the confusion matrix it results in $0.4519231$.  Used `predict` to get test confusion matrix.
+
+```{r,echo=F,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# Reference: https://cran.r-project.org/web/packages/mclust/vignettes/mclust.html
+# and https://www.rdocumentation.org/packages/mclust/versions/5.4/topics/mclustModelNames
+# Retrieved: 02/14/18
+
+# fit mclustda
+weekly.fit.mclustda <- MclustDA(weekly.train$Lag2, weekly.train$Direction)
+weekly.mclustda.summary <- summary(weekly.fit.mclustda, 
+                                   newdata = weekly.test$Lag2, 
+                                   newclass = weekly.test$Direction)
+
+weekly.preds <- predict.MclustDA(weekly.fit.mclustda, weekly.test$Lag2)
+
+# calculate error rate
+weekly.mclustda.test.error.rate <- mean(weekly.test$Direction != weekly.preds$classification)
+
+# print summary
+# Change test error from weekly.mclustda.summary[["err.newdata"]] due to issue
+kable(rbind("Training" = weekly.mclustda.summary[["err"]], 
+            "Test" = weekly.mclustda.test.error.rate), 
+      caption = "Error Rates")
+
+kable(weekly.mclustda.summary[["tab"]],
+      caption = "Training Confusion Matrix")
+
+# kable(weekly.mclustda.summary[["tab.newdata"]],
+#        caption = "Test Confusion Matrix")
+
+kable(table(weekly.preds$classification, weekly.test$Direction),
+      caption = "Test Confusion Matrix")
+
+# Reference: http://www.dataschool.io/simple-guide-to-confusion-matrix-terminology/
+# and https://en.wikipedia.org/wiki/Confusion_matrix
+# to help with calculating TP and TN rates
+# Retrieved: 02/14/18
+```
+   
+## Part ii
+
+Fitting `MclustDA` with a model type of `EDDA` on the `Weekly` dataset from `ISLR` library, using the variable `Lag2` as the predictor, the training error is $0.4456853$ and the test error is $0.375$.  The best model selected is equal variance (one-dimensional) for a univariate mixture with a BIC of $-4429.152$.  The true positive rate is $96.32$ percent and the true negative rate is $4.99$ percent for the training set.  The true positive rate is $62.22$ percent and the true negative rate is $64.29$ percent for the test set.
+
+```{r,echo=F,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# fit mclustda with model type EDDA
+weekly.fit.mclustda.2 <- MclustDA(weekly.train$Lag2, 
+                                  weekly.train$Direction, 
+                                  modelType = "EDDA")
+
+weekly.mclustda.summary.2 <- summary(weekly.fit.mclustda.2, 
+                                     newdata = weekly.test$Lag2, 
+                                     newclass = weekly.test$Direction)
+
+weekly.preds.2 <- predict.MclustDA(weekly.fit.mclustda.2, weekly.test$Lag2)
+
+# print summary
+kable(rbind("Training" = weekly.mclustda.summary.2[["err"]], 
+            "Test" = weekly.mclustda.summary.2[["err.newdata"]]),
+      caption = "Error Rates (Model Type = EDDA)")
+
+kable(weekly.mclustda.summary.2[["tab"]],
+      caption = "Training Confusion Matrix")
+
+# kable(weekly.mclustda.summary.2[["tab.newdata"]],
+#       caption = "Test Confusion Matrix")
+
+kable(table(weekly.preds.2$classification, weekly.test$Direction),
+      caption = "Test Confusion Matrix")
+
+# calculate error rate 
+weekly.mclustda.test.error.rate.2 <- mean(weekly.test$Direction != weekly.preds.2$classification)
+```
+  
+## Part iii
+
+Comparing the accuracy rates from the above two models and the accuracy rates from the models fitted in Homework 3 and 4, the MclustDA using a model type of `EDDA` achieves the same rate of $62.5$ percent as both the logistic regression and LDA models.
+  
+# 4
+
+```{r,echo=F,include=FALSE,warning=F,message=F}
+# load auto data from ISLR
+data("Auto", package = "ISLR")
+
+# create binary variable - mpg01
+Auto$mpg01 <- ifelse(Auto$mpg > median(Auto$mpg), 1, 0)
+
+# encode as factors
+Auto$origin <- as.factor(Auto$origin)
+Auto$cylinders <- as.factor(Auto$cylinders)
+Auto$mpg01 <- as.factor(Auto$mpg01)
+```
+
+## Part i
+
+Fitting `MclustDA` on the `Auto` dataset from `ISLR`, using the `weight`, `displacement`, `horsepower`, `cylinders`, and `year` variables, the training error is $0.07664234$ and the test error is $0.2711864$.  The best model selected is ellipsoidal, equal volume and equal shape (EEV) for a multivariate mixture with a BIC of $-10070.94$.  The true positive rate is $95.17$ percent and the true negative rate is $89.15$ percent for the training set.  The true positive rate is $9.30$ percent and the true negative rate is $37.33$ percent for the test set.
+   
+```{r,echo=F,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# splitting the train and test set into 70/30 same as Homework 3
+# Reference: https://stackoverflow.com/questions/17200114/how-to-split-data-into-training-testing-sets-using-sample-function
+# Retrieved: 1/25/2018
+rows <- sample(x = nrow(Auto), size = floor(.70*nrow(Auto)))
+auto.train <- Auto[rows, ]
+auto.test <- Auto[-rows, ]
+
+auto.fit.mclustda <- MclustDA(auto.train[,c(2,3,4,5,7)], auto.train$mpg01)
+auto.mclustda.summary <- summary(auto.fit.mclustda, 
+                                 newdata = auto.test[,c(2,3,4,5,7)], 
+                                 newclass = auto.test$mpg01)
+
+auto.preds <- predict.MclustDA(auto.fit.mclustda, 
+                               auto.test[,c(2,3,4,5,7)])
+
+# print summary
+kable(rbind("Training" = auto.mclustda.summary[["err"]], 
+            "Test" = auto.mclustda.summary[["err.newdata"]]),
+      caption = "Error Rates")
+
+kable(auto.mclustda.summary[["tab"]],
+      caption = "Training Confusion Matrix")
+
+# kable(auto.mclustda.summary[["tab.newdata"]],
+#       caption = "Test Confusion Matrix")
+
+kable(table(auto.preds$classification, auto.test$mpg01),
+      caption = "Test Confusion Matrix")
+
+# calculate error rate
+auto.mclustda.test.error.rate <- mean(auto.test$mpg01 != auto.preds$classification)
+```
+ 
+## Part ii
+
+Fitting `MclustDA` with a model type of `EDDA` on the `Auto` dataset from `ISLR`, using the `weight`, `displacement`, `horsepower`, `cylinders`, and `year` variables, the training error is $0.1715328$ and the test error is $0.1016949$.  The best model selected is diagonal, equal volume and shape (EEI) for a multivariate mixture with a BIC of $-13101.94$.  The true positive rate is $99.31$ percent and the true negative rate is $64.34$ percent for the training set.  The true positive rate is $84.21$ percent and the true negative rate is $95.08$ percent for the test set.
+
+```{r,echo=F,warning=F,message=F}
+auto.fit.mclustda.2 <- MclustDA(auto.train[,c(2,3,4,5,7)], 
+                                auto.train$mpg01, 
+                                modelType = "EDDA")
+
+auto.mclustda.summary.2 <- summary(auto.fit.mclustda.2, 
+                                 newdata = auto.test[,c(2,3,4,5,7)], 
+                                 newclass = auto.test$mpg01)
+
+auto.preds.2 <- predict.MclustDA(auto.fit.mclustda.2, 
+                                 auto.test[,c(2,3,4,5,7)])
+
+# print summary
+kable(rbind("Training" = auto.mclustda.summary.2 [["err"]], 
+            "Test" = auto.mclustda.summary.2 [["err.newdata"]]),
+      caption = "Error Rates (Model Type = EDDA)")
+
+kable(auto.mclustda.summary.2 [["tab"]],
+      caption = "Training Confusion Matrix")
+
+# kable(auto.mclustda.summary.2 [["tab.newdata"]],
+#       caption = "Test Confusion Matrix")
+
+kable(table(auto.preds.2$classification, auto.test$mpg01),
+      caption = "Test Confusion Matrix")
+
+# calculate error rate
+auto.mclustda.test.error.rate.2 <- mean(auto.test$mpg01 != auto.preds.2$classification)
+```
+
+## Part iii
+
+Comparing the error rates from the above two models and the error rates from the models fitted in Homework 3 and 4, the MclustDA models do not achieve better error rates than logistic regression and the LDA and QDA models which was $6.78$ percent.
+
+# 5  
+
+In the paper Who Wrote Ronald Reagan's Radio Addresses by Airoldi et al. (2006), the authors present methods they used to determine the authorship of 312 radio broadcasts performed by Ronald Reagan in the 1970s.
+	
+Ronald Reagan started promoting his image and policies by delivering weekly radio addresses.  These were instrumental in how Ronald Reagan communicated to his listeners who he was.  The texts of 1032 radio addresses Ronald Reagan delivered between 1975 and 1979 were analyzed to differentiate between the writing styles of Reagan and his collaborators, one of which was Peter Hannaford. 
+	
+An initial goal of the study was finding a writing style that Ronald Reagan had so that speeches that Reagan drafted could be separated from those that other collaborators did.  Three exploratory methods such as Words, ordered sequences of n adjacent words known as n-grams, and the intent on the usage of a word considered semantic features, were useful in identifying some differentiating features between Ronald Reagan and his other collaborators.  Information gain ratio, stepwise procedures, Kolmogorov-Smirnov statistic, Welch approximate t-tests, and the Delta squared statistic were some of the selection criteria used to help quantify enough distinction between two authors to determine a feature as a good discriminator.
+	
+Using two-stage selection procedure and the correction for multiple tests when appropriate along with scoring six different pools of features individually using the criteria above started the experiments.  High-frequency words, SMART list of words, semantic features, information gain, and two-stage selection on 4-grams were five selected strategies for summarizing the results.  The first pool using high-frequency words handpicked 267 words from the 3000 most frequent words in the vocabulary of Reagan and Hannaford.  The SMART text categorization system by Salton and Buckley created a list of 523 words.  Further testing using false discovery rates eliminated the list down to 62 discriminating words.  Semantic features on the third pool retrieved 21 features but by using linear discriminant function with double jackknife procedure, the list resulted in six weakly discriminating features.  Using information gain on the fourth pool resulted in roughly 30 discriminating words.  The strategy of using two-stage selection on 4-grams returned a list of 142 discriminating words and bi-grams.
+	
+Exploring a fully Bayesian approach for classification methods allowed the authors to estimate posterior odds of authorship.  The model captures relevant characteristics of the data and allows the natural expression of prior information.   Some assumptions were determined by using independence of words, Non-Binomiality, and goodness of fit. 
+  
+Along with the Bayesian model, the Poisson and Negative-Binomial models resulted in over 90 percent cross-validated accuracy when tested against both "known" and "unknown" speeches over several different scenarios.  The Poisson model had a predictive accuracy of around ninety percent.  The Negative-Binomial model was more accurate than the Poisson model with an out of sample cross validation accuracy between 91 and 95 percent. 
+	
+The study revealed that 167 out of 312 radio addresses that had uncertain authors determined Ronald Reagan wrote them.  This analysis also helped in understanding how well he communicated and to understand him as a man and the type of president he became.
+
+# 6
+
+Exploring the `mushroom` dataset from the last homework there are 22 predictor variables among 8124 observations with the following attribute information.
+
+1. cap-shape: bell=b,conical=c,convex=x,flat=f,knobbed=k,sunken=s
+2. cap-surface: fibrous=f,grooves=g,scaly=y,smooth=s
+3. cap-color: brown=n,buff=b,cinnamon=c,gray=g,green=r,pink=p,purple=u,red=e,white=w,yellow=y
+4. bruises?: bruises=t,no=f
+5. odor: almond=a,anise=l,creosote=c,fishy=y,foul=f,musty=m,none=n,pungent=p,spicy=s
+6. gill-attachment: attached=a,descending=d,free=f,notched=n
+7. gill-spacing: close=c,crowded=w,distant=d
+8. gill-size: broad=b,narrow=n
+9. gill-color: black=k,brown=n,buff=b,chocolate=h,gray=g,green=r,orange=o,pink=p,purple=u,red=e,white=w,yellow=y
+10. stalk-shape: enlarging=e,tapering=t
+11. stalk-root: bulbous=b,club=c,cup=u,equal=e,rhizomorphs=z,rooted=r,missing=?
+12. stalk-surface-above-ring: fibrous=f,scaly=y,silky=k,smooth=s
+13. stalk-surface-below-ring: fibrous=f,scaly=y,silky=k,smooth=s
+14. stalk-color-above-ring: brown=n,buff=b,cinnamon=c,gray=g,orange=o,pink=p,red=e,white=w,yellow=y
+15. stalk-color-below-ring: brown=n,buff=b,cinnamon=c,gray=g,orange=o,pink=p,red=e,white=w,yellow=y
+16. veil-type: partial=p,universal=u
+17. veil-color: brown=n,orange=o,white=w,yellow=y
+18. ring-number: none=n,one=o,two=t
+19. ring-type: cobwebby=c,evanescent=e,flaring=f,large=l, none=n,pendant=p,sheathing=s,zone=z
+20. spore-print-color: black=k,brown=n,buff=b,chocolate=h,green=r, orange=o,purple=u,white=w,yellow=y
+21. population: abundant=a,clustered=c,numerous=n,scattered=s,several=v,solitary=y
+22. habitat: grasses=g,leaves=l,meadows=m,paths=p,urban=u,waste=w,woods=d
+
+```{r,echo=F,warning=F,message=F}
+# reference: https://archive.ics.uci.edu/ml/datasets/mushroom
+# retrieved: 02/14/18
+# load dataset from url and set column names
+url <- "https://archive.ics.uci.edu/ml/machine-learning-databases/mushroom/agaricus-lepiota.data"
+mushrooms <- read.table(file = url, header = F, sep = ",", stringsAsFactors = T,
+                        col.names = c("class","cap.shape","cap.surface","cap.color","bruises","odor",
+                         "gill.attachment","gill.spacing","gill.size","gill.color","stalk.shape",
+                         "stalk.root","stalk.surface.above.ring","stalk.surface.below.ring",
+                         "stalk.color.above.ring","stalk.color.below.ring","veil.type","veil.color",
+                         "ring.number","ring.type","spore.print.color","population","habitat"))
+```
+
+Viewing the structure of the dataset we can see that all of the variables are categorical (factors) with multiple levels except for the `veil.type` variable.  It has only one level in the data, therefore we can remove the variable from further analysis.  One of the biggest challenges with the data is that all of the columns are categorical (factor) variables using one-letter abbreviations for the data making the different levels hard to interpret.  The data also did not have any headers so those were added during load based on the data set definitions.  Being that the data is a all categorical it made it difficult to use a variety of different plots without doing a bunch of data manipulation, therefore we stuck with stacked bar charts and mosaic plots.  
+
+```{r,echo=F,warning=F,message=F}
+str(mushrooms)
+# remove variables with only one level
+mushrooms$veil.type <- NULL
+```
+
+A summary of the class variable shows that $48.2$ percent are classified as poisonous (p) and $51.8$ percent are classified as edible (e). 
+
+```{r,echo=F,warning=F,message=F}
+# print summary of class (e/p)
+kable(summary(mushrooms[, 1]))
+```
+
+We can create some quick visualizations of the data with stacked bar charts.  Looking at comparisons of cap shapes we notice that mushrooms with a bell (b) cap shape are mostly edible (e) and all sunken (s) cap shaped mushrooms are edible (e).  We can see an interesting relationship between odor and whether a mushroom is edible or not.  When mushrooms have and almond (a), or anise (l) odor they are classified as edible (e).  However, if the mushroom has a creosote (c), foul (f), pungent (p), spicy (s), or fishy (y) odor they are classified as poisonous (p).  Those that have no (n) odor can be either.  Looking at the relationship between population and class we see that mushrooms that are in an abundant (a), clustered (c), or numerous (n) population are mostly edible (e).  Those that are in a scattered (s), several (v), or solitary (y) population can be either edible (e) or poisonous (p).  Viewing the relationship between cap surface and class shows that those with grooves (g) are all poisonous (p) and those that are fibrous (f), scaly (s), or smooth (y) can be either edible (e) or poisonous (p). 
+
+```{r,echo=F,warning=F,message=F}
+# standard plots
+#par(mfrow=c(2,2))
+
+barplot(table(mushrooms$class, mushrooms$cap.shape),
+        xlab = "cap shape", ylab = "count",
+        main = "Count of cap shape per class",
+        legend = rownames(table(mushrooms$class, mushrooms$cap.shape)),
+        args.legend=list(x="topleft"))
+
+barplot(table(mushrooms$class, mushrooms$cap.surface),
+        xlab = "cap surface", ylab = "count",
+        main = "Count of cap surface per class",
+        legend = rownames(table(mushrooms$class, mushrooms$cap.surface)),
+        args.legend=list(x="topleft"))
+
+barplot(table(mushrooms$class, mushrooms$odor),
+        xlab = "odor", ylab = "count",
+        main = "Count of odor per class",
+        legend = rownames(table(mushrooms$class, mushrooms$odor)))
+
+barplot(table(mushrooms$class, mushrooms$population),
+        xlab = "population", ylab = "count",
+        main = "Count of population per class",
+        legend = rownames(table(mushrooms$class, mushrooms$population)),
+        args.legend=list(x="topleft"))
+
+```
+
+```{r,echo=F,warning=F,message=F}
+# ggplot
+p1 <- ggplot(mushrooms, aes(x=cap.shape, fill=class)) +
+  geom_bar() +
+  theme_bw() +
+  scale_fill_brewer(palette="PuBu") +
+  ggtitle("Count of cap shape by class")
+
+# p2 <- ggplot(mushrooms, aes(x=cap.color, fill=class)) +
+#   geom_bar(stat="count", position="dodge") +
+#   theme_bw() +
+#   scale_fill_brewer(palette="PuBu") 
+
+p2 <- ggplot(mushrooms, aes(x=cap.surface, fill=class)) +
+  geom_bar() +
+  theme_bw() +
+  scale_fill_brewer(palette="PuBu") +
+  ggtitle("Count of cap surface by class")
+
+p3 <- ggplot(mushrooms, aes(x=odor, fill=class)) +
+  geom_bar() +
+  theme_bw() +
+  scale_fill_brewer(palette="PuBu") +
+  ggtitle("Count of odor by class")
+
+# p5 <- ggplot(mushrooms, aes(x=habitat, fill=class)) +
+#   geom_bar(stat="count", position="dodge") +
+#   theme_bw() +
+#   scale_fill_brewer(palette="PuBu") 
+
+p4 <- ggplot(mushrooms, aes(x=population, fill=class)) +
+  geom_bar() +
+  theme_bw() +
+  scale_fill_brewer(palette="PuBu") +
+  ggtitle("Count of population by class")
+
+grid.arrange(p1, p2, p3, p4, ncol = 2)
+```
+
+The mosaic plot for the relationship between cap color and class shows that mushrooms with a cap color of cinnamon (c), green (r), or purple (u) are generally edible.  The mosaic plot for the relationship between habitat and class shows that the majority of mushrooms that are in meadows (m) and waste (w) are mostly edible.
+
+```{r,echo=F,warning=F,message=F}
+mosaicplot(~ cap.color+class, data = mushrooms, shade=F,
+           color = brewer.pal(n = 6, name = "PuBu"),
+           main = "Relationship between cap color and class")
+
+mosaicplot(~ habitat+class, data = mushrooms, shade=F,
+           color = brewer.pal(n = 6, name = "PuBu"),
+           main = "Relationship between habitat and class")
+
+```
+
+

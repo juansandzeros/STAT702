@@ -1,0 +1,380 @@
+---
+title: "Homework 3"
+author: "Juan Harrington"
+date: "February 6, 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# load libraries
+library(ISLR)
+library(ggplot2)
+library(knitr)
+library(broom)
+library(gridExtra)
+library(MASS)
+library(broom)
+library(GGally)
+library(corrplot)
+library(RColorBrewer)
+
+# seed # for reproducibility
+seed <- 13579
+```
+
+# Question 4.7.1 
+
+Using algebra we can prove that (4.1) is equivelant to (4.3).  In other words, the logistic regression function representation and the logit representation for the logistic regression model are equivelant.
+
+The logistic function representation (4.1) is:
+
+$$p(X) = \dfrac{e^{B_0+B_1X}}{1+e^{B_0+B_1X}}$$
+The logit representation (4.2) is:
+
+$$\dfrac{p(X)}{1-p(X)}=e^{B_0+B_1X}$$
+Using substitution of $p(X)$ we get:
+
+$$=\dfrac{\dfrac{e^{B_0+B_1X}}{1+e^{B_0+B_1X}}}{1-\dfrac{e^{B_0+B_1X}}{1+e^{B_0+B_1X}}}$$
+We then subtract the denominator like so:
+
+$$=\dfrac{\dfrac{e^{B_0+B_1X}}{1+e^{B_0+B_1X}}}{ \dfrac{1+e^{B_0+B_1X}}{1+e^{B_0+B_1X}}-\dfrac{e^{B_0+B_1X}}{1+e^{B_0+B_1X}}}$$
+which results in:
+
+$$=\dfrac{\dfrac{e^{B_0+B_1X}}{1+e^{B_0+B_1X}}}{\dfrac{1}{1+e^{B_0+B_1X}}}$$
+Now if we multiple by fraction:
+
+$$=\dfrac{\dfrac{e^{B_0+B_1X}}{1+e^{B_0+B_1X}}}{\dfrac{1}{1+e^{B_0+B_1X}}} * \dfrac{\dfrac{1+e^{B_0+B_1X}}{1}}{\dfrac{1+e^{B_0+B_1X}}{1}}$$
+
+the result equals a function of:
+
+$$=e^{B_0+B_1X}$$
+
+# Question 4.7.10
+
+The `Weekly` dataset from the `ISLR` library has weekly percentage returns for the S&P 500 stock index between 1990 and 2010.  There are 1089 observations and 9 variables.
+
+  * Year: The year that the observation was recorded
+  * Lag1: Percentage return for previous week
+  * Lag2: Percentage return for 2 weeks previous
+  * Lag3: Percentage return for 3 weeks previous
+  * Lag4: Percentage return for 4 weeks previous
+  * Lag5: Percentage return for 5 weeks previous
+  * Volume: Average number of daily shares traded in billions
+  * Today: Percentage return for this week
+  * Direction: Down and Up indicating whether the market had a positive or negative return on a given week
+    
+```{r,echo=F,include=FALSE,warning=F,message=F}
+# load weekly data from ISLR
+data("Weekly", package = "ISLR")
+```
+
+## Part a
+
+By producing numerical and graphical summaries of the `Weekly` data we see that the `Volume` and `Year` variables have a positive correlation.  Also, the `Today` variable as well as all of the `Lag` variables have the same minimum and maximum values.
+
+```{r,echo=F,warning=F,message=F}
+summary(Weekly)
+```
+
+```{r,echo=F,warning=F,message=F,fig.width=9,fig.height=9}
+# standard plot
+pairs(Weekly, main = "Scatterplot Matrix")
+```
+
+```{r,echo=F,warning=F,message=F,fig.width=9,fig.height=9}
+# ggplot
+ggpairs(Weekly,
+  title = "Generalized Pairs Plot") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) 
+```
+
+## Part b
+
+Fitting a logistic regression on the `Weekly` dataset using the `Direction` variable as the response and the five lag variables in addition to `Volume` as predictors the summary indicates that the `Lag2` variable is statistically significant based on it's small p-value.
+
+```{r,echo=F,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# fit logistic regression
+fit.weekly.glm <- glm(Direction ~ Lag1 + Lag2 + Lag3 + Lag4 + Lag5 + Volume,
+                  data = Weekly, family = binomial())
+#summary(fit.weekly.glm)
+kable(tidy(fit.weekly.glm),
+      caption = "Logistic Regression Summary Statistics")
+```
+
+## Part c
+
+By creating a confusion matrix the correct predictions is calculated at $56.11$ percent and the error rate is calculated at $43.89$ percent.  Also, the model correctly predicted 54 "Down" days versus 557 "Up" days indicating better accuracy when predicting "Up" days.  A confusion matrix is a convenient way to display two types of errors being made by logistic regeression in binary classification problems.  It can incorrectly assign the direction of the stock index, Up when it is Down, and Down when it is Up.     
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# predict
+weekly.glm.prob <- predict(fit.weekly.glm, type = "response")
+
+# create confusion matrix
+weekly.glm.pred <- rep("Down", length(weekly.glm.prob))
+weekly.glm.pred[weekly.glm.prob > .5] = "Up"
+kable(table(weekly.glm.pred, Weekly$Direction),
+      caption = "Model 1 Confusion Matrix")
+
+# calculate rates
+weekly.glm.correct <- round(((54 + 557) / nrow(Weekly)), 4)
+weekly.glm.error <- round(1 - ((54 + 557) / nrow(Weekly)), 4) 
+```
+
+## Part d
+
+By fitting a logistic regression model using training data from 1990 to 2008 with the `Lag2` variable as the only predictor and the 2009 and 2010 data as holdout we get a correct predictions rate of $62.5$ percent with an error rate of $37.5$ percent.  This is better than the correct prediction rate for model 1.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# create training data (from 1990-2008)
+weekly.train <- subset(Weekly, Year > 1989 & Year < 2009)
+weekly.test <- subset(Weekly, Year > 2008)
+
+# fit logistic regression on training data
+fit.weekly.glm.2 <- glm(Direction ~ Lag2,
+                  data = weekly.train, family = binomial())
+#summary(fit.weekly.glm.2)
+kable(tidy(fit.weekly.glm.2),
+      caption = "Logistic Regression Summary Statistics")
+
+# predict
+weekly.glm.prob.2 <- predict(fit.weekly.glm.2, 
+                             newdata = weekly.test, 
+                             type = "response")
+
+# create confusion matrix
+weekly.glm.pred.2 <- rep("Down", length(weekly.glm.prob.2))
+weekly.glm.pred.2[weekly.glm.prob.2 > .5] = "Up"
+kable(table(weekly.glm.pred.2, weekly.test$Direction),
+      caption = "Model 2 Confusion Matrix")
+
+# calculate rates
+weekly.glm.correct.2 <- round(((9 + 56) / nrow(weekly.test)), 4) 
+weekly.glm.error.2 <- round(1 - ((9 + 56) / nrow(weekly.test)), 4) 
+```
+
+# Question 4.7.11
+
+The `Auto` dataset from the `ISLR` library contains information for 392 vehicles.  There are 9 variables.
+  
+  * mpg: miles per gallon
+  * cylinders: Number of cylinders between 4 and 8
+  * displacement: Engine displacement (cu. inches)
+  * horsepower: Engine horsepower
+  * weight: Vehicle weight (lbs.)
+  * acceleration: Time to accelerate from 0 to 60 mph (sec.)
+  * year: Model year
+  * origin: Origin of car (1. American, 2. European, 3. Japanese)
+  * name: Vehicle name
+
+```{r,echo=F,include=FALSE,warning=F,message=F}
+# load auto data from ISLR
+data("Auto", package = "ISLR")
+```
+
+## Part a
+
+A binary variable `mpg01` is created that contains a 1 if the miles per gallon (mpg) contains a value above its median, and a 0 if mpg has a value below its median.  
+
+```{r,echo=FALSE,warning=F,message=F}
+# create binary variable - mpg01
+Auto$mpg01 <- ifelse(Auto$mpg > median(Auto$mpg), 1, 0)
+#summary(Auto)
+```
+
+## Part b
+
+By exploring the `Auto` data graphically we see from the correlation plot that the variables `displacement`, `horsepower`, and `weight` are highly correlated.   
+
+```{r,echo=F,warning=F,message=F}
+# encode as factors
+Auto$origin <- as.factor(Auto$origin)
+Auto$cylinders <- as.factor(Auto$cylinders)
+Auto$mpg01 <- as.factor(Auto$mpg01)
+
+# issue with title location
+# Referenced: https://stackoverflow.com/questions/40509217/how-to-have-r-corrplot-title-position-correct
+# Retrieved: 2/5/18
+# create a correlation matrix plot
+correlations <- cor(Auto[, c(-2,-8,-9,-10)])
+corrplot(correlations, 
+         type = "upper",
+         method = "color",
+         diag = F,
+         addCoef.col = "black",
+         col = brewer.pal(n=8, name="PuOr"), 
+         mar = c(0,0,1,0),
+         number.cex = 0.75,
+         tl.col = "black",
+         title = "Correlation plot")
+```
+
+Viewing the boxplots we can determine that the `displacement`, `horsepower`, and `weight` variables have good separation with differences in their distributions and there is a relationship between them and mpg01.  The `acceleration` variable does not appear to.  It also looks like there is a relationship between year and mpg01 with newer vehicles being above the median mpg.  
+
+```{r,echo=FALSE,warning=F,message=F,fig.width=9,fig.height=9}
+# create standard boxplots
+par(mfrow=c(2,3))
+
+boxplot(displacement ~ mpg01, data = Auto, 
+        xlab = "mpg01", ylab = "displacement", 
+        main = "Displacement vs mpg01")
+
+boxplot(horsepower ~ mpg01, data = Auto, 
+        xlab = "mpg01", ylab = "horsepower", 
+        main = "Horsepower vs mpg01")
+
+boxplot(weight ~ mpg01, data = Auto, 
+        xlab = "mpg01", ylab = "weight", 
+        main = "Weight vs mpg01")
+
+boxplot(acceleration ~ mpg01, data = Auto, 
+        xlab = "mpg01", ylab = "acceleration", 
+        main = "Acceleration vs mpg01")
+
+boxplot(year ~ mpg01, data = Auto, 
+        xlab = "mpg01", ylab = "year", 
+        main = "Year vs mpg01")
+```
+
+```{r,echo=FALSE,warning=F,message=F,fig.width=9,fig.height=9}
+# create ggplot boxplots
+p1 <- ggplot(Auto, aes(x = as.factor(mpg01), y = displacement)) +
+  geom_boxplot() +
+  scale_x_discrete(name = "mpg01") +
+  ggtitle("Displacement vs mpg01")
+
+p2 <- ggplot(Auto, aes(x = as.factor(mpg01), y = horsepower)) +
+  geom_boxplot() +
+  scale_x_discrete(name = "mpg01") +
+  ggtitle("Horsepower vs mpg01")
+
+p3 <- ggplot(Auto, aes(x = as.factor(mpg01), y = weight)) +
+  geom_boxplot() +
+  scale_x_discrete(name = "mpg01") +
+  ggtitle("Weight vs mpg01")
+   
+p4 <- ggplot(Auto, aes(x = as.factor(mpg01), y = acceleration)) +
+  geom_boxplot() +
+  scale_x_discrete(name = "mpg01") +
+  ggtitle("Acceleration vs mpg01")
+   
+p5 <- ggplot(Auto, aes(x = as.factor(mpg01), y = year)) +
+  geom_boxplot() +
+  scale_x_discrete(name = "mpg01") +
+  ggtitle("Year vs mpg01")
+
+grid.arrange(p1, p2, p3, p4, p5, ncol = 2)
+```
+
+The `cylinders` and `origin` variables were encoded as factors.  The `origin` variable is a classification assigning the origin of the car.  The `cylinders` variable did not appear to have a clean order and by looking at the histogram below we can see that there are very few 3 and 5 cylinder observations and 4 cylinders are generally above the median mpg.  
+
+```{r,echo=FALSE,warning=F,message=F}
+# create histograms
+p1 <- ggplot(Auto, aes(factor(origin), fill = factor(mpg01))) +
+  geom_bar(position = "dodge") +
+  labs(x = 'Origin', y = 'Count') +
+   scale_fill_discrete(name="mpg01", labels=c("Below", "Above")) +
+  ggtitle("Count for Origin by mpg01") 
+
+p2 <- ggplot(Auto, aes(factor(cylinders), fill = factor(mpg01))) +
+  geom_bar(position = "dodge") +
+  labs(x = 'Cylinders', y = 'Count') +
+  scale_fill_discrete(name="mpg01", labels=c("Below", "Above")) +
+  ggtitle("Count for Cylinders by mpg01")
+
+grid.arrange(p1, p2, ncol = 2)
+```
+
+## Part c
+
+Data is split into a training set and a test set using a 70/30 percent random sample split.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# splitting the train and test set into 70/30
+# Reference: https://stackoverflow.com/questions/17200114/how-to-split-data-into-training-testing-sets-using-sample-function
+# Retrieved: 1/25/2018
+rows <- sample(x = nrow(Auto), size = floor(.70*nrow(Auto)))
+auto.train <- Auto[rows, ]
+auto.test <- Auto[-rows, ]
+```
+
+## Part f
+
+Performing a logistic regression using the `weight`, `displacement`, `horsepower`, `cylinders`, and `year` variables on the training data created from the `Auto` data we calculate the test error rate at $6.78$ percent.   
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# perform logistic regression on the auto training data
+fit.auto.glm <- glm(mpg01 ~ weight + displacement + horsepower + year + cylinders, 
+                    data = auto.train, family = binomial())
+
+#summary(fit.auto.glm)
+kable(tidy(fit.auto.glm),
+      caption = "Logistic Regression Summary Statistics")
+
+# predict
+auto.glm.prob <- predict(fit.auto.glm, 
+                           newdata = auto.test, 
+                           type = "response")
+
+# create confusion matrix
+auto.glm.pred <- rep(0, length(auto.glm.prob))
+auto.glm.pred[auto.glm.prob > .5] <- 1
+kable(table(auto.glm.pred, auto.test$mpg01),
+      caption = "mpg01 Confusion Matrix")
+
+# calculate rates
+auto.glm.correct <- round(((63 + 47) / nrow(auto.test)), 4) 
+auto.glm.error <- round(1 - ((63 + 47) / nrow(auto.test)), 4) 
+```
+
+# 4
+
+A function is created in RMD that calculates the misclassification rate, sensitivity, and specificity. The inputs for this function are a cutoff point, predicted probabilities, and original binary response.
+
+```{r,warning=F,message=F}
+# create function
+pred.summary <- function(cutoff, pred_prob, orig_binary) {
+
+  # determine cutoff values
+  class_pred <- ifelse(pred_prob > cutoff, "Positive", "Negative")
+  
+  # create a confusion matrix
+  confusion_matrix <- table(class_pred, orig_binary)
+  
+  # make calculations
+  misclassification <- 1 - sum(diag(confusion_matrix))/sum(confusion_matrix)  
+  sensitivity <- confusion_matrix[2, 2]/sum(confusion_matrix[, 2]) 
+  specificity <- confusion_matrix[1, 1]/sum(confusion_matrix[, 1])
+  
+  # return results
+  results <- c(misclassification, sensitivity, specificity)
+  names(results) <- c("misclassification", "sensitivity", "specificity")
+  return(t(results))
+}
+```
+
+```{r,warning=F,message=F}
+# example usage
+kable(pred.summary(.5, weekly.glm.prob, Weekly$Direction))
+kable(pred.summary(.5, weekly.glm.prob.2, weekly.test$Direction))
+kable(pred.summary(.5, auto.glm.prob, auto.test$mpg01))
+```
+

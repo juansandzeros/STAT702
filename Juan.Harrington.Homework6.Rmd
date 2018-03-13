@@ -1,0 +1,624 @@
+---
+title: "Homework 6"
+author: "Juan Harrington"
+date: "February 27, 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# load libraries
+library(ISLR)
+library(knitr)
+library(broom)
+library(MASS)
+library(class)
+library(mclust)
+library(caret)
+library(rpart)
+library(rpart.plot)
+
+# seed # for reproducibility
+seed <- 702
+```
+
+# Question 5.4.3
+
+## Part a
+
+An alternative to LOOCV is k-fold cross validation.  It is implemented by taking the observations $n$ and randomly splitting them into a number of equally sized $k$ parts, or folds.  The folds are treated as a validation set, and the rest as a training set.  The model is then fit by leaving out part $k$ and using the $k-1$ parts. This approach is then repeated for each part and the results combined.  By averaging the resulting $k$ MSE the test error is then estimated.
+
+## Part b
+
+What are the advantages and disadvantages of k-fold cross validation in relation to the validation set approach and LOOCV?
+
+There are two potential drawbacks to the validation set approach compared to k-fold cross validation.  The first is the validation estimate of the test error can be highly variable.  The second is that only a subset of the observations which are included in the training set are used to fit the model.  Because statistical methods tend to perform worse when trained on fewer observations, this suggests that the validation set error rate may overestimate the test error rate for the model for on the entire data set.
+
+LOOCV is computationally expensive that requires fitting the statistical learning method $n$ times.  In contrast k-fold cross validation only requires fitting the learning procedure a set number of times based on the value of $k$, typically 5 or 10.  Also, k-fold cross validation usually has more accurate test error rate estimates than LOOCV.  One disadvantage of using k-fold cross validation compared to LOOCV is if the main purpose is bias reduction.  In this case LOOCV is preferred because it has less bias.  There is a bias-variance trade-off associated with k-fold cross validation that produce test error rate estimates that do not suffer from high bias or high variance.  
+
+# Question 5.4.5 
+
+```{r,include=FALSE,warning=F,message=F}
+# load default data from ISLR
+data("Default", package = "ISLR")
+```
+
+## Part a
+
+We are asked to fit a logistic regression model using `income` and `balance` to predict `default`.  The error rate is $0.0263$.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+# fit logistic regression
+fit.default.glm <- glm(default ~ income + balance, 
+                       data = Default, family = "binomial")
+# summary
+kable(tidy(fit.default.glm),
+      caption = "Logistic Regression Summary")
+
+# predict
+prob.default <- predict(fit.default.glm, Default, type="response")
+pred.default <- ifelse(prob.default > 0.5, "Yes", "No")
+
+kable(table("Pred."=pred.default, Default$default),
+      caption = "Confusion Matrix")
+
+# error rate
+default.err <- mean(Default$default != pred.default)
+```
+
+## Part b
+
+We are asked to fit logistic regression using the validation set approach on `income` and `balance` to predict `default`.  The data is split into 50 percent training set and 50 percent validation set.  
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# i.
+# Split the sample set into a half creating a training set 
+train <- sort(sample(nrow(Default), nrow(Default)*0.5, replace = F))
+
+#ii.
+# fit logistic regression using training observations
+fit.default.glm.50 <- glm(default ~ income + balance, data = Default, 
+                       family = "binomial", subset = train)
+
+# summary
+kable(tidy(fit.default.glm.50),
+      caption = "Logistic Regression Summary")
+
+#iii.
+# predict
+prob.default.50 <- predict(fit.default.glm.50, Default[-train,], type = "response")
+pred.default.50 <- ifelse(prob.default.50 > 0.5, "Yes", "No")
+
+kable(table("Pred."=pred.default.50, Default[-train,]$default),
+      caption = "Confusion Matrix")
+
+#iv.
+# error rate
+default.err.50 <- mean(Default[-train,]$default != pred.default.50)  
+```
+
+## Part c
+
+Repeating (b) we are asked to fit logistic regression using different splits on `income` and `balance` to predict `default`.  The first time the data is split into 60 percent training and 40 percent validation.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# i.
+# This is using three different proportions, ex: 60/40, 70/30, 80/20 
+train <- sort(sample(nrow(Default), nrow(Default)*0.6, replace = F))
+
+#ii.
+# fit logistic regression on training subset
+fit.default.glm.60 <- glm(default ~ income + balance, data = Default, 
+                          family = "binomial", subset = train)
+
+# summary
+kable(tidy(fit.default.glm.60),
+      caption = "Logistic Regression Summary")
+
+#iii.
+# predict
+prob.default.60 <- predict(fit.default.glm.60, Default[-train,], type = "response")
+pred.default.60 <- ifelse(prob.default.60 > 0.5, "Yes", "No")
+kable(table("Pred."=pred.default.60, Default[-train,]$default),
+      caption = "Confusion Matrix")
+
+#iv.
+# error rate
+default.err.60 <- mean(Default[-train,]$default != pred.default.60)  
+```
+
+Repeating (b) we are asked to fit logistic regression using different splits on `income` and `balance` to predict `default`.   The second time the data is split into 70 percent training and 30 percent validation.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# i.
+# This is using three different proportions, ex: 50/50, 70/30, 80/20 
+train <- sort(sample(nrow(Default), nrow(Default)*0.7, replace = F))
+
+#ii.
+# fit logistic regression on training subset
+fit.default.glm.70 <- glm(default ~ income + balance, data = Default, 
+                          family = "binomial", subset = train)
+
+# summary
+kable(tidy(fit.default.glm.70),
+      caption = "Logistic Regression Summary")
+
+#iii.
+# predict
+prob.default.70 <- predict(fit.default.glm.70, Default[-train,], type = "response")
+pred.default.70 <- ifelse(prob.default.70 > 0.5, "Yes", "No")
+kable(table("Pred."=pred.default.70, Default[-train,]$default),
+      caption = "Confusion Matrix")
+
+#iv.
+# error rate
+default.err.70 <- mean(Default[-train,]$default != pred.default.70)  
+```
+
+Repeating (b) we are asked to fit logistic regression using different splits on `income` and `balance` to predict `default`.   The third time the data is split into 80 percent training and 20 percent validation.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# i.
+# This is using three different proportions, ex: 50/50, 70/30, 80/20 
+train <- sort(sample(nrow(Default), nrow(Default)*0.8, replace = F))
+
+#ii.
+# fit logistic regression on training subset
+fit.default.glm.80 <- glm(default ~ income + balance, data = Default, 
+                          family = "binomial", subset = train)
+
+# summary
+kable(tidy(fit.default.glm.80),
+      caption = "Logistic Regression Summary")
+
+#iii.
+# predict
+prob.default.80 <- predict(fit.default.glm.80, Default[-train,], type = "response")
+pred.default.80 <- ifelse(prob.default.80 > 0.5, "Yes", "No")
+kable(table("Pred."=pred.default.80, Default[-train,]$default),
+      caption = "Confusion Matrix")
+
+#iv.
+# error rate
+default.err.80 <- mean(Default[-train,]$default != pred.default.80)  
+```
+
+Logistic regression was fit on the `Default` dataset using different ratios of split resulting in the following misclassification rates.  The error rate is variable based on the size of splits which make up the observations in the training set.  This can happen with the validation set approach.  Moreover, statistal methods tend to perform worse when trained on fewer observations.
+
+```{r,echo=FALSE,warning=F,message=F}
+default.err.rates <- rbind("50/50 Split"=default.err.50, 
+                           "60/40 Split"=default.err.60, 
+                           "70/30 Split"=default.err.70, 
+                           "80/20 Split"=default.err.80)
+colnames(default.err.rates) <- c("Rate")
+
+kable(default.err.rates,
+      caption = "Error rates for different splits")
+```
+
+## Part d
+
+We are asked to fit logistic regression using `income` and `balance` and the dummy variable for `student` to predict `default`.  The results show that a lower test error is not observed when including the `student` variable, resulting in $0.0274$, which is the same as using the `income` and `balance` variables with a 50/50 split.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# split into training
+train <- sort(sample(nrow(Default), nrow(Default)*0.5, replace = F))
+
+# fit logistic regression on training subset
+fit.default.glm.stu <- glm(default ~ income + balance + student, 
+                       data = Default, family = "binomial", subset = train)
+
+# summary
+kable(tidy(fit.default.glm.stu),
+      caption = "Logistic Regression Summary")
+
+# predict
+prob.default.stu <- predict(fit.default.glm.stu, Default[-train, ], type = "response")
+pred.default.stu <- ifelse(prob.default.stu > 0.5, "Yes", "No")
+
+kable(table("Pred."=pred.default.stu, Default[-train,]$default),
+      caption = "Confusion Matrix")
+
+# error rate
+default.err.stu <- mean(pred.default.stu != Default[-train, ]$default)
+```
+
+# Question 5.4.7  
+
+```{r,include=FALSE,warning=F,message=F}
+# load Weekly data from ISLR
+data("Weekly", package = "ISLR")
+```
+
+## Part a
+
+Fitting a logistic regression model on the `Weekly` data set that predicts `Direction` using `Lag1` and `Lag2` results in an error rate of $44.44$ percent.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# fit logistic regression
+fit.weekly.glm <- glm(Direction ~ Lag1 + Lag2, 
+                      data = Weekly, family = "binomial")
+kable(tidy(fit.weekly.glm),
+      caption = "Logistic Regression Summary")
+
+# predict
+prob.default <- predict(fit.weekly.glm, Weekly, type="response")
+pred.default <- ifelse(prob.default > 0.5, "Up", "Down")
+
+kable(table("Pred."=pred.default, Weekly$Direction),
+      caption = "Confusion Matrix")
+
+# error rate
+default.err <- mean(Weekly$Direction != pred.default)
+```
+  
+## Part b
+
+Fitting a logistic regression model on the `Weekly` data set that predicts `Direction` using `Lag1` and `Lag2` for all but the first observation results in an error rate of $44.35$ percent.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# fit logistic regression excluding first row
+fit.weekly.glm.2 <- glm(Direction ~ Lag1 + Lag2, data = Weekly[-1,], 
+                        family = binomial())
+kable(tidy(fit.weekly.glm.2),
+      caption = "Logistic Regression Summary")
+
+# predict
+prob.default <- predict(fit.weekly.glm.2, Weekly, type="response")
+pred.default <- ifelse(prob.default > 0.5, "Up", "Down")
+
+kable(table("Pred."=pred.default, Weekly$Direction),
+      caption = "Confusion Matrix")
+
+# error rate
+default.err.sub <- mean(Weekly$Direction != pred.default)
+```
+
+## Part c
+
+We are asked to use the model from (b) to predict the direction of the first observation.  The result was misclassified with a prediction of "Up" when the true direction was "Down".
+
+```{r,echo=FALSE,warning=F,message=F}
+ifelse(predict(fit.weekly.glm.2, Weekly[1, ], type = "response") > 0.5, "Up", "Down")
+kable(Weekly[1,], caption = "First observation")
+```
+
+## Part d
+
+We were asked to write a `for loop` to fit logistic regression on the `Weekly` data set using LOOCV.
+
+```{r,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# create for loop performing LOOCV
+weekly.loocv.err <- rep(0, nrow(Weekly))
+for (i in 1:nrow(Weekly)) {
+    fit.glm <- glm(Direction ~ Lag1 + Lag2, 
+                   data = Weekly[-i, ], family = "binomial")
+    
+    pred.glm <- predict.glm(fit.glm, Weekly[i, ], type = "response") > 0.5
+    up <- Weekly[i, ]$Direction == "Up"
+    if (pred.glm != up)
+        weekly.loocv.err[i] <- 1
+}
+```
+
+## Part e
+
+The LOOCV estimate results in a test error rate of $44.995$ percent.
+
+```{r,echo=FALSE,warning=F,message=F}
+kable(mean(weekly.loocv.err),
+      caption = "LOOCV error rate")
+```
+
+# 4. 
+
+We are asked to fit a linear regression model with the formula \textit{mpg $\sim$ horsepower + $horsepower^2$} from the `Auto` data in the `ISLR` library using k-fold cross validation.  The data is split into 6 groups to estimate the cross validation prediction error, which results in an average of $23.43053$.  
+
+```{r,echo=F,warning=F,message=F}
+# load Auto data from ISLR
+data("Auto", package = "ISLR")
+
+# Reference: https://stats.stackexchange.com/questions/61090/how-to-split-a-data-set-to-do-10-fold-cross-validation
+# and example from videos
+# Retrieved: 02/23/18
+
+# set seed
+set.seed(seed)
+
+# Randomize data
+permut.n <- sample(1:nrow(Auto), nrow(Auto))
+# Create 6 equally sized folds
+folds <- cbind(sort(rep(seq(1, 6, 1), 66))[1:nrow(Auto)], permut.n)
+
+# Create empty data frame to store error rates
+auto.err <- NULL
+
+# perform 6-fold cross validation
+for(i in 1:6){
+  # segment the data by fold using the which() function 
+  testIndexes <- which(folds == i, arr.ind = T)
+  testData <- Auto[testIndexes, ]
+  trainData <- Auto[-testIndexes, ]
+
+  # perform linear regression using training data
+  auto.lm <- lm(mpg ~ horsepower + horsepower^2, data = trainData)
+  # predict
+  auto.pred <- predict(auto.lm, trainData)
+  # calculate error and add to array
+  auto.err[i] <- mean((trainData$mpg - auto.pred)^2)  
+}
+
+# display error rates
+kable(data.frame(auto.err),
+      caption = "Auto Prediction Error Rates")
+```
+
+# 5. 
+
+Continuing the analysis on the `mushroom` dataset from the previous homework, dummy variable encoding was performed prior to fitting Logistic Regression, KNN, LDA, QDA, MclustDA, and MclustDA with EDDA if appropriate.  
+```{r,include=FALSE,warning=F,message=F}
+# reference: https://archive.ics.uci.edu/ml/datasets/mushroom
+# retrieved: 02/21/18
+# load dataset from url and set column names
+url <- "https://archive.ics.uci.edu/ml/machine-learning-databases/mushroom/agaricus-lepiota.data"
+mushrooms <- read.table(file = url, header = F, sep = ",", stringsAsFactors = T,
+                        col.names = c("class","cap.shape","cap.surface","cap.color","bruises","odor",
+                         "gill.attachment","gill.spacing","gill.size","gill.color","stalk.shape",
+                         "stalk.root","stalk.surface.above.ring","stalk.surface.below.ring",
+                         "stalk.color.above.ring","stalk.color.below.ring","veil.type","veil.color",
+                         "ring.number","ring.type","spore.print.color","population","habitat"))
+
+# remove variables with only one level
+mushrooms$veil.type <- NULL
+
+# References:
+# https://machinelearningmastery.com/why-one-hot-encode-data-in-machine-learning/
+# https://amunategui.github.io/dummyVar-Walkthrough/
+# https://stackoverflow.com/questions/40678170/caret-dummy-vars-exclude-target
+# Retrieved: 02/23/18
+
+# one-hot encoding to create dummy variables
+# using fullRank = T avoids the 'dummy variable' trap.
+dmy <- dummyVars(~., data = mushrooms, fullRank = T)
+dummy.mush <- data.frame(predict(dmy, newdata = mushrooms))
+colnames(dummy.mush)[1] <- "poisonous"
+```
+
+Fitting a logistic regression model on all predictors results in the error `glm.fit: algorithm did not converge`.  Trying only the `odor` variable by splitting the data into 60 percent training and 40 percent validation data sets, results in a $98.52$ percent accuracy rate.  However, looking at the p-values it does not appear that any of them are significant.
+
+```{r,echo=FALSE,warning=F,message=F} 
+# set seed
+set.seed(seed)
+
+# split into training and test
+mush.train <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.6)
+mush.test <- dummy.mush[-mush.train, ]
+
+# fit logistic regression
+fit.mush.glm <- glm(poisonous ~ odor.c + odor.f + odor.l + odor.m + 
+                      odor.n + odor.p + odor.s + odor.y, data = dummy.mush, 
+                    family = binomial(), subset = mush.train)
+
+kable(tidy(fit.mush.glm),
+      caption = "Logistic Regression Summary")
+
+# predict
+prob.mush.glm <- predict(fit.mush.glm, dummy.mush, type="response")
+pred.mush.glm <- ifelse(prob.mush.glm > 0.5, 1, 0)
+
+kable(table("Pred."=pred.mush.glm, dummy.mush$poisonous),
+      caption = "Confusion Matrix")
+
+# error rate
+mush.glm.correct <- mean(pred.mush.glm == dummy.mush$poisonous)
+mush.glm.error <- mean(pred.mush.glm != dummy.mush$poisonous)
+```
+
+Fitting `KNN` using all predictors results in a $100.00$ percent accuracy rate.
+
+```{r,echo=FALSE,warning=F,message=F}
+#set seed
+set.seed(seed)
+
+rows <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.6)
+train.knn <- dummy.mush[rows,2:ncol(dummy.mush)]
+test.knn <- dummy.mush[-rows,2:ncol(dummy.mush)]
+train.class <- dummy.mush[rows, 1]
+test.class <- dummy.mush[-rows, 1]
+
+pred.mush.knn <- knn(train = data.frame(train.knn),
+                    test = data.frame(test.knn),
+                    cl = train.class, k = 1)
+
+
+kable(table(pred.mush.knn, test.class),
+      caption = "KNN Confusion Matrix")
+
+# calculate rates
+mush.knn.correct <- mean(pred.mush.knn == test.class)
+mush.knn.error <- mean(pred.mush.knn != test.class)
+```
+
+Fitting `LDA` using all predictors results in a message that `In lda.default(x, grouping, ...) : variables are collinear`.  However, it does return a result of $99.91$ percent accuracy rate.  This means that some of the predictors are correlated.  Further analysis is needed to determine which predictors to optimally use.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# fit model using linear discriminant analysis (LDA)
+fit.mush.lda <- lda(poisonous ~ ., data = dummy.mush,
+                    subset = mush.train)
+
+# predict
+mush.lda.prob <- predict(fit.mush.lda, 
+                         newdata = dummy.mush[-mush.train,], 
+                         type = "response")
+
+# create confusion matrix
+kable(table(dummy.mush[-mush.train,]$poisonous, mush.lda.prob$class),
+      caption = "LDA Confusion Matrix")
+
+# calculate rates
+mush.lda.correct <- mean(mush.lda.prob$class == dummy.mush[-mush.train,]$poisonous)
+mush.lda.error <- mean(mush.lda.prob$class != dummy.mush[-mush.train,]$poisonous) 
+```
+
+Fitting QDA using all predictors results in the message `Error in qda.default(x, grouping, ...) : rank deficiency in group e`.  The rank deficiency in this context says there is insufficient information contained in the data to estimate the model.  Some variables are collinear and one or more covariance matrices cannot be inverted to obtain the estimates in the group.  More analysis is needed to determine which predictors to discard from the model.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+#set.seed(seed)
+
+# split into training
+#rows <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.6)
+#mush.train <- dummy.mush[rows, ]
+#mush.test <- dummy.mush[-rows, ]
+
+# Reference: https://stats.stackexchange.com/questions/35071/what-is-rank-deficiency-and-how-to-deal-with-it
+# Retrieved: 02/23/18
+# fit model using linear discriminant analysis (LDA)
+# fit.mush.qda <- qda(poisonous ~ ., data = mush.train)
+# 
+# # predict
+# mush.qda.prob <- predict(fit.mush.qda, 
+#                          newdata = mush.test, 
+#                          type = "response")
+# 
+# # create confusion matrix
+# kable(table(df_all[-mush.train,]$class, mush.qda.prob$class),
+#       caption = "QDA Confusion Matrix")
+# 
+# # calculate rates
+# mush.qda.correct <- mean(mush.qda.prob$class == df_all[-mush.train,]$class)
+# mush.qda.error <- mean(mush.qda.prob$class != df_all[-mush.train,]$class) 
+```
+
+Fitting `MclustDA` using all predictors results in a $97.90$ percent accuracy rate.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# split into training
+rows <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.6)
+mush.train <- dummy.mush[rows, ]
+mush.test <- dummy.mush[-rows, ]
+
+mush.fit.mclustda <- MclustDA(mush.train[,c(2:96)], mush.train$poisonous)
+mush.mclustda.summary <- summary(mush.fit.mclustda, 
+                                 newdata = mush.test[,c(2:96)], 
+                                 newclass = mush.test$poisonous)
+
+mush.preds <- predict.MclustDA(mush.fit.mclustda, 
+                               mush.test[,c(2:96)])
+
+# print summary
+kable(rbind("Training" = mush.mclustda.summary[["err"]], 
+            "Test" = mush.mclustda.summary[["err.newdata"]]),
+      caption = "Error Rates")
+
+kable(mush.mclustda.summary[["tab"]],
+      caption = "Training Confusion Matrix")
+
+# kable(auto.mclustda.summary[["tab.newdata"]],
+#       caption = "Test Confusion Matrix")
+
+kable(table(mush.preds$classification, mush.test$poisonous),
+      caption = "Test Confusion Matrix")
+
+# calculate error rate
+mush.mclustda.err <- mean(mush.test$poisonous != mush.preds$classification)
+```
+
+Fitting `MclustDA` with `EDDA` using all predictors results in a $100.00$ percent accuracy rate.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# split into training
+rows <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.6)
+mush.train <- dummy.mush[rows, ]
+mush.test <- dummy.mush[-rows, ]
+
+mush.fit.mclustda <- MclustDA(mush.train[,c(2:96)], mush.train$poisonous, 
+                              modelType = "EDDA")
+
+mush.mclustda.summary <- summary(mush.fit.mclustda, 
+                                 newdata = mush.test[,c(2:96)], 
+                                 newclass = mush.test$poisonous)
+
+mush.preds <- predict.MclustDA(mush.fit.mclustda, 
+                               mush.test[,c(2:96)])
+
+# print summary
+kable(rbind("Training" = mush.mclustda.summary[["err"]], 
+            "Test" = mush.mclustda.summary[["err.newdata"]]),
+      caption = "Error Rates")
+
+kable(mush.mclustda.summary[["tab"]],
+      caption = "Training Confusion Matrix")
+
+# kable(auto.mclustda.summary[["tab.newdata"]],
+#       caption = "Test Confusion Matrix")
+
+kable(table(mush.preds$classification, mush.test$poisonous),
+      caption = "Test Confusion Matrix")
+
+# calculate error rate
+mush.mclustda.edda.err <- mean(mush.test$poisonous != mush.preds$classification)
+```
+
+After analyzing the above results and some research it appears that for the `mushroom` data we would not normally use the above models and instead would use a regression tree or gradient boosting.  Fitting a regression tree produces the following results.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# fit regression tree
+mush_rpart <- rpart(class ~ ., data = mushrooms,
+                      control = rpart.control(minsplit = 10))
+
+# Pruning the tree
+# choosing the best complexity parameter "cp" to prune the tree
+cp.optim <- mush_rpart$cptable[which.min(mush_rpart$cptable[,"xerror"]),"CP"]
+# tree prunning using the best complexity parameter. For more in
+tree <- prune(mush_rpart, cp=cp.optim)
+
+# predict
+pred <- predict(tree, mushrooms[-1])
+
+# show tree
+rpart.plot(tree)
+```
+

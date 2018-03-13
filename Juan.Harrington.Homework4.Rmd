@@ -1,0 +1,456 @@
+---
+title: "Homework 4"
+author: "Juan Harrington"
+date: "February 13, 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# load libraries
+library(ISLR)
+library(MASS)
+library(knitr)
+library(broom)
+library(class)
+
+# seed # for reproducibility
+seed <- 13579
+```
+
+# Question 4.7.3
+
+```{r,include=F}
+# References below used to assist in solving the problem
+# Also collaborated with Alvin Bahr and John Giorgio
+# Retrieved: 2/9/18
+
+#https://en.wikipedia.org/wiki/List_of_logarithmic_identities
+#https://www.chilimath.com/lessons/advanced-algebra/expanding-logarithms/
+#https://www.youtube.com/watch?v=2Q4nBPfl_eU
+#https://people.eecs.berkeley.edu/~jrs/189/lec/07.pdf
+#https://gerardnico.com/wiki/data_mining/discriminant_analysis_quadratic
+#http://www.cnel.ufl.edu/courses/EEL6814/chapter2.pdf
+#http://www.inf.ed.ac.uk/teaching/courses/inf2b/learnnotes/inf2b-learn-note10-2up.pdf
+#https://codesachin.wordpress.com/2015/08/25/linear-and-quadratic-discriminant-analysis-for-ml-statistics-newbies/
+```
+
+Since there is only one feature, i.e., $p = 1$, in QDA, we have Bayes classfier assigning an observation to the Gaussian density function in figure 4.11.  If we don't make the assumption that $\delta^2_1 = ... = \delta^2_K$ and that it is univariate, plugging in figure 4.11 into figure 4.10 gives us (4.12):
+
+$$
+p_k(x) = \frac{{{\pi _k}\frac{1}{{\sqrt {2\pi } \sigma_k }}\exp ( - \frac{1}{{2{\sigma ^2}}}{{(x - {\mu _k})}^2})}}{{\sum {\pi _l}\frac{1}{{\sqrt {2\pi } \sigma_l }}\exp ( - \frac{1}{{2{\sigma_l ^2}}}{{(x - {\mu _l})}^2})}}
+$$
+
+We can take the `log` on both sides, performing substitution and simplifing by expanding logarithms to get:
+
+$$
+\begin{array}{l}
+\log ({p_k}(x)) = \log (\frac{{{\pi _k}\frac{1}{{\sqrt {2\pi } {\sigma _k}}}\exp ( - \frac{1}{{2{\sigma_{k} ^2}}}{{(x - {\mu _k})}^2})}}{{\sum {{\pi _l}} \frac{1}{{\sqrt {2\pi } {\sigma _l}}}\exp ( - \frac{1}{{2\sigma _l^2}}{{(x - {\mu _l})}^2})}})\\
+{\rm \log} ({p_k}(x))\log (\sum {{\pi _l}} \frac{1}{{\sqrt {2\pi } {\sigma _l}}}\exp ( - \frac{1}{{2\sigma _l^2}}{(x - {\mu _l})^2})) = {\rm \log} ({\pi _k}) - log(\sqrt {2\pi } {\sigma _k}) - \frac{{{{(x - {\mu _k})}^2}}}{{2{\sigma_{k}^2}}}
+\end{array}
+$$
+
+Since $\log (\sum {{\pi _l}} \frac{1}{{\sqrt {2\pi } {\sigma _l}}}\exp ( - \frac{1}{{2\sigma _l^2}}{(x - {\mu _l})^2}))$ can be treated as constant, due to the fact that it is the same for each $k$, we we can ignore it and we get
+
+$$
+{\delta _k}(x) = \log ({\pi _k}) - log(\sqrt {2\pi } {\sigma _k}) - \frac{{{{(x - {\mu _k})}^2}}}{{2{\sigma_{k} ^2}}}
+$$
+
+where $\delta(x)$ is a quadratic function of $x$.  This is quadratic because in the last term we have $2\sigma_{k}^2$ in the denominator and we are unable to get rid of the $(x-\mu_{k})^2$ term in the numerator thus making it quadratic.  
+
+# Question 4.7.5 
+
+## Part a
+
+If the Bayes decision boundary is linear, then QDA is expected to perform better on the training set because it is more flexible and it will have a closer fit. LDA is expected to perform better than QDA on the test set because QDA suffers from high variance without a way to handle bias.  QDA may also overfit the test set if there are too few observations. 
+
+## Part b
+
+If the Bayes decision boundary is non-linear, QDA is expected to perform better on both the training and test sets.
+
+## Part c
+
+As sample size increases, QDA is expected to have an improved test prediction accuracy compared to LDA.  This is because QDA is more flexible and as the sample size increases issues of variance are offset. These can lead to a better fit.
+
+## Part d
+
+If the Bayes decision boundary for a given problem is linear, we would likely not achieve a superior test error rate using QDA rather than LDA even though QDA is flexible enough to model a linear decision boundary. This is because with fewer sample points, the variance from using a more flexible method, such as QDA, would lead to overfitting, causing a higher test rate than LDA.
+
+# Homework \#3 Question 4.7.10(e-i)
+
+The `Weekly` dataset from the `ISLR` library has weekly percentage returns for the S&P 500 stock index between 1990 and 2010.  There are 1089 observations and 9 variables.
+
+  * Year: The year that the observation was recorded
+  * Lag1: Percentage return for previous week
+  * Lag2: Percentage return for 2 weeks previous
+  * Lag3: Percentage return for 3 weeks previous
+  * Lag4: Percentage return for 4 weeks previous
+  * Lag5: Percentage return for 5 weeks previous
+  * Volume: Average number of daily shares traded in billions
+  * Today: Percentage return for this week
+  * Direction: Down and Up indicating whether the market had a positive or negative return on a given week
+    
+```{r,echo=F,include=FALSE,warning=F,message=F}
+# load weekly data from ISLR
+data("Weekly", package = "ISLR")
+
+# create training data (from 1990-2008)
+weekly.train <- subset(Weekly, Year > 1989 & Year < 2009)
+weekly.test <- subset(Weekly, Year > 2008)
+```
+
+## Part e
+
+By fitting a linear discriminant analysis (LDA) model using training data from 1990 to 2008 with the `Lag2` variable as the only predictor and the 2009 and 2010 data as holdout we get a correct predictions rate of $62.5$ percent with an error rate of $37.5$ percent.  The same values as the fitted logistic regression model in (d).
+
+```{r,echo=F,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# fit model using linear discriminant analysis (LDA)
+fit.weekly.lda <- lda(Direction ~ Lag2, data = Weekly)
+
+# predict
+weekly.lda.prob <- predict(fit.weekly.lda, 
+                           newdata = weekly.test, 
+                           type = "response")
+
+# create confusion matrix
+kable(table(weekly.test$Direction, weekly.lda.prob$class),
+      caption = "LDA Confusion Matrix")
+
+# calculate rates
+weekly.lda.correct <- mean(weekly.lda.prob$class == weekly.test$Direction)
+weekly.lda.error <- mean(weekly.lda.prob$class != weekly.test$Direction) 
+```
+
+## Part f
+
+By fitting a quadratic discriminant analysis (QDA) model using training data from 1990 to 2008 with the `Lag2` variable as the only predictor and the 2009 and 2010 data as holdout we get a correct predictions rate of $58.65$ percent with an error rate of $41.35$ percent.  This is not as good as the LDA results in (e).
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# fit model using quadratic discriminant analysis (QDA)
+fit.weekly.qda <- qda(Direction ~ Lag2, data = Weekly)
+
+# predict
+weekly.qda.prob <- predict(fit.weekly.qda, 
+                           newdata = weekly.test, 
+                           type = "response")
+
+# create confusion matrix
+kable(table(weekly.test$Direction, weekly.qda.prob$class),
+      caption = "QDA Confusion Matrix")
+
+# calculate rates
+weekly.qda.correct <- mean(weekly.qda.prob$class == weekly.test$Direction) 
+weekly.qda.error <- mean(weekly.qda.prob$class != weekly.test$Direction)
+```
+
+## Part g
+
+By fitting a k-Nearest Neighbors regression (KNN) model using training data from 1990 to 2008 with the `Lag2` variable as the only predictor and the 2009 and 2010 data as holdout we get a correct predictions rate of $50$ percent.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+train.knn <- subset(weekly.train, select = c("Lag2", "Direction"))
+weekly.knn.fit <- knn(train = data.frame(train.knn$Lag2), 
+                    test = data.frame(weekly.test$Lag2), 
+                    cl = train.knn$Direction, k = 1)
+
+kable(table(weekly.test$Direction, weekly.knn.fit),
+      caption = "KNN Confusion Matrix")
+
+# calculate rates
+weekly.knn.correct <- mean(weekly.knn.fit == weekly.test$Direction) 
+weekly.knn.error <- mean(weekly.knn.fit != weekly.test$Direction) 
+```
+
+## Part h
+
+The LDA method using training data with the `Lag2` variable appear to have the best results.
+
+```{r,echo=FALSE,warning=F,message=F}
+kable(rbind("LDA"=weekly.lda.correct, "QDA"=weekly.qda.correct, "KNN"=weekly.knn.correct),
+      caption = "Correct Prediction Rates for Various Models")
+```
+
+## Part i
+
+Experimenting using different predictors, `Lag1`, `Lag3`, and `Lag5`, including an interaction term between the `Lag1` and `Lag5` variables, using the formula `Direction ~ Lag3 + Lag1:Lag5`, results in correct prediction rate of $58.7$ percent using LDA.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# fit model using linear discriminant analysis (LDA) 
+# with different predictors and an interaction between Lag1/Lag5
+fit.weekly.lda.mixed <- lda(Direction ~ Lag3 + Lag1:Lag5, data = Weekly)
+
+# predict
+weekly.lda.prob.mixed <- predict(fit.weekly.lda.mixed, 
+                                      newdata = weekly.test, 
+                                      type = "response")
+
+# create confusion matrix
+kable(table(weekly.test$Direction, weekly.lda.prob.mixed$class),
+      caption = "LDA Confusion Matrix with Different Predictors and Interaction")
+
+# calculate rates
+weekly.lda.mixed.correct <- mean(weekly.lda.prob.mixed$class == weekly.test$Direction)
+weekly.lda.mixed.error <- mean(weekly.lda.prob.mixed$class != weekly.test$Direction)
+```
+
+Experimenting with an interaction between the `Lag2` and `Lag3` variables, using the formula `Direction ~ Lag2*Lag3`, results in correct prediction rate of $60.6$ percent using QDA.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# fit model using quadratic discriminant analysis (QDA) and interaction term
+fit.weekly.qda.interation <- qda(Direction ~ Lag2*Lag3, data = Weekly)
+
+# predict
+weekly.qda.prob.interation <- predict(fit.weekly.qda.interation, 
+                                      newdata = weekly.test, 
+                                      type = "response")
+
+# create confusion matrix
+kable(table(weekly.test$Direction, weekly.qda.prob.interation$class),
+      caption = "QDA Confusion Matrix with Interaction")
+
+# calculate rates
+weekly.qda.interaction.correct <- mean(weekly.qda.prob.interation$class == weekly.test$Direction) 
+weekly.qda.interaction.error <- mean(weekly.qda.prob.interation$class != weekly.test$Direction)
+```
+
+Experimenting with a square root transformation on the `Lag2` variable, using the formula `Direction ~ Lag2 + sqrt(abs(Lag2))`, results in correct prediction rate of $61.5$ percent using LDA.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# fit model using linear discriminant analysis (LDA) 
+# with Lag2 and a square root transform on the predictor
+fit.weekly.lda.sqrt <- lda(Direction ~ Lag2 + sqrt(abs(Lag2)), data = Weekly)
+
+# predict
+weekly.lda.prob.sqrt <- predict(fit.weekly.lda.sqrt, 
+                                      newdata = weekly.test, 
+                                      type = "response")
+
+# create confusion matrix
+kable(table(weekly.test$Direction, weekly.lda.prob.sqrt$class),
+      caption = "LDA Confusion Matrix with Square Root of Lag2")
+
+# calculate rates
+weekly.lda.sqrt.correct <- mean(weekly.lda.prob.sqrt$class == weekly.test$Direction)
+weekly.lda.sqrt.error <- mean(weekly.lda.prob.sqrt$class != weekly.test$Direction)
+```
+
+Experimenting with a `Log` transformation on the `Lag2` variable, using the formula `Direction ~ log(abs(Lag2)+1)`, results in a correct prediction rate of $58.7$ percent using QDA.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# fit model using quadratic discriminant analysis (QDA) 
+# with a log transform on the Lag2 predictor
+fit.weekly.qda.log <- qda(Direction ~ log(abs(Lag2)+1), data = Weekly)
+
+# predict
+weekly.qda.prob.log <- predict(fit.weekly.qda.log, 
+                                      newdata = weekly.test, 
+                                      type = "response")
+
+# create confusion matrix
+kable(table(weekly.test$Direction, weekly.qda.prob.log$class),
+      caption = "QDA Confusion Matrix with Log of Lag2")
+
+# calculate rates
+weekly.qda.log.correct <- mean(weekly.qda.prob.log$class == weekly.test$Direction)
+weekly.qda.log.error <- mean(weekly.qda.prob.log$class != weekly.test$Direction)
+```
+
+Experimenting with KNN using the number of neighbors considered, k, ranging from 1 to 10 with the `Lag2` variable shows that a k of 4 has a better correct prediction rate of $61.5$ percent.  
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# KNN using Lag2
+w.knn.train <- subset(weekly.train, select = c("Lag2"))
+w.knn.test <- subset(weekly.test, select = c("Lag2"))
+train.direction <- weekly.train[,9]
+
+weekly.knn.corr <- data.frame("k" = 1:10, Accuracy = NA)
+for(k in 1:10){
+  weekly.knn.pred <- knn(w.knn.train, w.knn.test, 
+                         train.direction, k = k)
+  # test error rate
+  weekly.knn.corr$Accuracy[k] <- mean(weekly.knn.pred == weekly.test$Direction) 
+}
+
+kable(weekly.knn.corr, 
+      caption = "KNN Test Accuracy Rates (k=1:10)")
+```
+
+A confusion table shows the correct prediction rates for the various experiment of models using interactions and transformations with LDA and QDA. The LDA with a square root transformation seems to have the best prediction rate of $61.5$%.
+
+```{r,echo=FALSE,warning=F,message=F}
+# print comparisons
+kable(rbind("LDA Interaction"=weekly.lda.mixed.correct, 
+            "QDA Interaction"=weekly.qda.interaction.correct, 
+            "LDA Sqrt Transform"=weekly.lda.sqrt.correct,
+            "QDA Log Transform"=weekly.qda.log.correct),
+      caption = "Correct Prediction Rates for Various Models")
+```
+
+# Homework \#3 Question 4.7.11(d,e,g) 
+
+The `Auto` dataset from the `ISLR` library contains information for 392 vehicles.  There are 9 variables.
+  
+  * mpg: miles per gallon
+  * cylinders: Number of cylinders between 4 and 8
+  * displacement: Engine displacement (cu. inches)
+  * horsepower: Engine horsepower
+  * weight: Vehicle weight (lbs.)
+  * acceleration: Time to accelerate from 0 to 60 mph (sec.)
+  * year: Model year
+  * origin: Origin of car (1. American, 2. European, 3. Japanese)
+  * name: Vehicle name
+
+```{r,echo=F,include=FALSE,warning=F,message=F}
+# load auto data from ISLR
+data("Auto", package = "ISLR")
+
+# create binary variable - mpg01
+Auto$mpg01 <- ifelse(Auto$mpg > median(Auto$mpg), 1, 0)
+
+# encode as factors
+Auto$origin <- as.factor(Auto$origin)
+Auto$cylinders <- as.factor(Auto$cylinders)
+Auto$mpg01 <- as.factor(Auto$mpg01)
+```
+
+```{r,echo=FALSE,include=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# splitting the train and test set into 70/30 same as Homework 3
+# Reference: https://stackoverflow.com/questions/17200114/how-to-split-data-into-training-testing-sets-using-sample-function
+# Retrieved: 1/25/2018
+rows <- sample(x = nrow(Auto), size = floor(.70*nrow(Auto)))
+auto.train <- Auto[rows, ]
+auto.test <- Auto[-rows, ]
+```
+
+## Part d
+
+Performing LDA using the weight, displacement, horsepower, cylinders, and year variables
+on the training data created from the Auto data we calculate the test error rate at $6.78$ percent.
+
+```{r,echo=F,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# fit model using linear discriminant analysis (LDA)
+fit.auto.lda <- lda(mpg01 ~ weight + displacement + horsepower + year + cylinders,
+                    data = auto.train)
+
+# predict
+auto.lda.prob <- predict(fit.auto.lda, 
+                           newdata = auto.test, 
+                           type = "response")
+
+# create confusion matrix
+kable(table(auto.test$mpg01, auto.lda.prob$class),
+      caption = "LDA Confusion Matrix")
+
+# calculate rates
+auto.lda.correct <- mean(auto.lda.prob$class == auto.test$mpg01)
+auto.lda.error <- mean(auto.lda.prob$class != auto.test$mpg01)
+```
+
+## Part e
+
+Performing QDA using the weight, displacement, horsepower, cylinders, and year variables
+on the training data created from the Auto data we calculate the test error rate at $6.78$ percent. This is the same rate as performing LDA (d).
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# fit model using quadratic discriminant analysis (QDA)
+fit.auto.qda <- qda(mpg01 ~ weight + displacement + horsepower + year + cylinders,
+                    data = auto.train)
+
+# predict
+auto.qda.prob <- predict(fit.auto.qda, 
+                           newdata = auto.test, 
+                           type = "response")
+
+# create confusion matrix
+kable(table(auto.test$mpg01, auto.qda.prob$class),
+      caption = "QDA Confusion Matrix")
+
+# calculate rates
+auto.qda.correct <- mean(auto.qda.prob$class == auto.test$mpg01)
+auto.qda.error <- mean(auto.qda.prob$class != auto.test$mpg01) 
+```
+
+## Part g
+
+Performing KNN using the weight, displacement, horsepower, cylinders, and year variables
+on the training data created from the Auto data using k, ranging from 1 to 10, we determine that the test error rate for the k value of 4 performing the best with $10.2$ percent.  This is not as good as the previous models using LDA and QDA.
+
+```{r,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# using weight + displacement + horsepower + year + cylinders from hw#3
+train <- subset(auto.train, select = c("cylinders", "horsepower", "weight", "displacement", "year"))
+test <- subset(auto.test, select = c("cylinders", "horsepower", "weight", "displacement", "year"))
+train.mpg01 <- auto.train[,10]
+
+# loop through knn using k(1:10)
+knn.auto.err <- data.frame("k" = 1:10, Error_Rate = NA)
+for(k in 1:10){
+  knn.auto.pred <- knn(train, test, train.mpg01, k = k)
+  # test error rate
+  knn.auto.err$Error_Rate[k] <- mean(knn.auto.pred != auto.test$mpg01) 
+}
+
+kable(knn.auto.err, 
+      caption = "KNN Test Error Rates (k=1:10)")
+```
+
+# Question 5
+
+In the paper Statistical Classification Methods in Consumer Credit Scoring: A Review by Hand and Henley (1997) the authors present a review of statistical methods used for credit scoring in financial institutions to help determine whether an applicant will default on repayment. 
+
+Using information an applicant provides at the time they apply for a loan assists in estimating the probability an application will default.  Traditional methods use human judgement based on experience to make informed decisions, however with the help of more powerful computer systems, development of complex statistical models help make decisions.  The authors explain some common nomenclature and credit scoring processes such as models being scorecards or classifiers.  They use the predictor variables from the application and other sources to estimate the probability of default within a given threshold. 
+
+Scoring methods use a variety of statistical methods such as discriminant analysis, linear regression, logistic regression, and decision trees.  A common practice is to define three different classes of risk; good, bad, and indeterminate.  An interesting point the authors make is that even though an applicant make be low risk, if they pay off their balance every month the bank is not profitable.  High-risk applicants can be profitable to the bank if there is a sufficiently high enough interest rate. 
+
+A problem that can arise with credit scoring applications and cause performance degradation on scorecards is population drift.  This happens when the distributions change because of the tendency for populations to change over time.  Adjusting classification thresholds and regularly creating new scorecards can help deal with this issue.
+
+Selecting characteristics for credit scoring are commonly accomplished using three different approaches. The first approach is using expert knowledge and experience that is complementary to the formal statistics. The second approach is using stepwise statistical procedures. The third approach is measuring the difference between distributions of the good and bad risks for that characteristic. 
+
+Accessing the performance of credit scoring model validation uses a test set because of the large data sets available.  Two methods for rating are measures of separability between the scoring distribution of good and bad risks' and counting methods.  Each applicant receives a score.  Which scoring method provides the best result?  There are many used in practice such as the ones discussed above, in addition to recursive partitioning, neural networks, and smoothing nonparametric methods.  However, there is no overall 'best' method.  It usually depends on the problem details, data structure, characteristics used, and the goal of the classification.
+
+There are also legal aspects involved with credit scoring.  Using certain characteristics for determining credit decisions, such as sex or race, is prohibited by legislature.  However, there are viewpoints that argue that to find the best risk predictor all characteristics would need to be included in the model.  Correcting or removing information about an applicant that is wrong is performed by credit reference agencies upon request from individuals because of the Consumer Credit Act of 1974.
+
+In conclusion, the authors help us understand concepts in credit scoring along with the statistical endeavors that are happening and problems associated with them.  
+
+# Question 6
+
+Exploring the [UCI Machine Learning Repository](https://archive.ics.uci.edu/ml/datasets.html) I came across the [Mushroom data set](https://archive.ics.uci.edu/ml/datasets/mushroom).  It is a hypothetical sampling of 23 species of gilled mushrooms in the Agaricus and Lepiota family.  Each species is classified as edible, poisonous, or unknown.  The dataset contains a total of 8124 observations with 22 different predictors including, cap shape, cap surface, cap color, bruises, odor, gill characteristics, stalk characteristics, veil type, veil color, ring number, ring type, spore print color, population, and habitat.  The problem involves using classification to predict whether the mushroom is poisonous or not.  Unfortunetly, the Audobon Society Field Guide presents that there is not a simple rule for determing edibility of a mushroom.  However, Duch W, Adamczak R, Grabczewski K (1996) were able to formulate a set of logical rules from the training data using backpropogation networks with a high degree of accuracy.  The rules involve using 6 predictors out of the 22.  Even though Duch et al. received high accuracy in their analysis I would still be cautious when coming to a conclusion that may be deadly.
+
