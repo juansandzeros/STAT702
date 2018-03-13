@@ -1,2 +1,2 @@
 # STAT702
-This is the collection of R code from STAT702 - Masters in Analysis courses at DSU
+This is the collection of R code for STAT702 course at SDSU
