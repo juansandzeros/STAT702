@@ -48,11 +48,11 @@ $$\alpha = \frac{\sigma_Y^2 - \sigma_{XY}}{\sigma_X^2 + \sigma_Y^2 - 2\sigma_{XY
 
 where $\sigma_X^2=Var(X)$, $\sigma_Y^2=Var(Y)$, and $\sigma_{XY} = Cov(X, Y)$.
 
-We have
+We can use basic properties of variance to substitute and get
 
 $$ = Var(\alpha X) + Var((1-\alpha)Y) +2 Cov(\alpha X, (1-\alpha)Y)$$
 
-Using substitution to get
+Using substitution we get
 
 $$  = \alpha^2 \sigma_X^2 + (1-\alpha)^2 \sigma_Y^2 + 2 \alpha (1-\alpha) \sigma_{XY}   $$
 Simplifying we get
@@ -227,7 +227,7 @@ percent.hat_mu
 
 ## Part h
 
-We are asked to use bootstrap to estimate the standard error of $\hat\mu_{0.1}$.  The standard error obtained using bootstrap is the same compared to the tenth percentile value from using `quantile` which means the estimate represents the population accurately.
+We are asked to use bootstrap to estimate the standard error of $\hat\mu_{0.1}$.  The estimated tenth percentile value of $12.75$ is equal to the value obtained in (g).  The standard error of $0.4826699$ can be interpreted as the amount the quarterly deviates from the estimate in each sample.  It is small compared to the tenth percentile which means the estimate represents the population fairly accurate.
 
 ```{r,echo=F,,warning=F,message=F}
 # set seed 
@@ -303,7 +303,7 @@ kable(table("Pred."=pred.mush.glm.vsa, "Actual"=mush.test.lr$poisonous),
       caption = "Confusion Matrix for vsa")
 
 # error rate
-mush.glm.vsa.error <- mean(pred.mush.glm.vsa != mush.test.lr$poisonous)
+mush.glm.vsa.error <- round(mean(pred.mush.glm.vsa != mush.test.lr$poisonous), 7)
 ```
 
 ```{r mush_glm_loocv,echo=F,warning=F,message=F}
@@ -330,7 +330,7 @@ for (i in 1:100) {
 }
 
 # error rate
-mush.glm.loocv.error <- mean(mush.glm.loocv.err)
+mush.glm.loocv.error <- round(mean(mush.glm.loocv.err), 7)
 ```
 
 ```{r mush_glm_cv,echo=F,warning=F,message=F}
@@ -368,7 +368,7 @@ kable(data.frame(mush.err),
        caption = "Prediction Error Rates for 5-fold cv")
 
 # error rate
-mush.glm.cv.error <- mean(mush.err)
+mush.glm.cv.error <- round(mean(mush.err), 7)
 ```
 
 ```{r mush_glm_err,echo=F,include=F,warning=F,message=F}
@@ -499,7 +499,7 @@ kable(table(mush.test.lda$poisonous, mush.lda.prob$class),
       caption = "LDA Confusion Matrix for vsa")
 
 # error rates
-mush.lda.vsa.error <- mean(mush.lda.prob$class != mush.test.lda$poisonous) 
+mush.lda.vsa.error <- round(mean(mush.lda.prob$class != mush.test.lda$poisonous), 7) 
 ```
 
 ```{r mush_lda_loocv,echo=FALSE,warning=F,message=F}
@@ -524,7 +524,7 @@ ct <- table(dummy.mush$poisonous, fit.mush.lda.loocv$class)
 kable(ct, caption = "LDA Confusion Matrix for LOOCV")
 
 # error rates
-mush.lda.loocv.error <- 1 - sum(diag(prop.table(ct)))
+mush.lda.loocv.error <- round(1 - sum(diag(prop.table(ct))), 7)
 ```
 
 ```{r mush_lda_cv,echo=F,warning=F,message=F}
@@ -564,7 +564,7 @@ kable(data.frame(mush.err),
        caption = "Prediction Error Rates for 5-fold cv")
 
 # error rate
-mush.lda.cv.error <- mean(mush.err)
+mush.lda.cv.error <- round(mean(mush.err), 7)
 ```
 
 ```{r mush_lda_err,echo=F,include=F,warning=F,message=F}
@@ -661,7 +661,7 @@ kable(table(mush.preds$classification, mush.test$poisonous),
       caption = "Test Confusion Matrix")
 
 # calculate error rate
-mush.mclustda.vsa.err <- mean(mush.test$poisonous != mush.preds$classification)
+mush.mclustda.vsa.err <- round(mean(mush.test$poisonous != mush.preds$classification), 7)
 ```
 
 ```{r mush_mclust_loocv,echo=F,warning=F,message=F}
@@ -683,7 +683,7 @@ for (i in 1:50) {
 }
 
 # error rate
-mush.mclustda.loocv.error <- mean(mush.loocv.err)
+mush.mclustda.loocv.error <- round(mean(mush.loocv.err), 7)
 ```
 
 ```{r mush_mclust_cv,echo=F,warning=F,message=F}
@@ -721,7 +721,7 @@ for(i in 1:k){
 }
 
 # error rate
-mush.mclustda.cv.error <- mean(mush.err)
+mush.mclustda.cv.error <- round(mean(mush.err), 7)
 ```
 
 ```{r mush_mclust_err,echo=F,include=F,warning=F,message=F}
@@ -790,7 +790,7 @@ kable(table(mush.preds$classification, mush.test$poisonous),
       caption = "Test Confusion Matrix")
 
 # calculate error rate
-mush.mclustda.edda.vsa.err <- mean(mush.test$poisonous != mush.preds$classification)
+mush.mclustda.edda.vsa.err <- round(mean(mush.test$poisonous != mush.preds$classification), 7)
 ```
 
 ```{r mush_mclust_edda_loocv,echo=F,warning=F,message=F}
@@ -814,7 +814,7 @@ for (i in 1:50) {
 }
 
 # error rate
-mush.mclustda.edda.loocv.error <- mean(mush.loocv.err)
+mush.mclustda.edda.loocv.error <- round(mean(mush.loocv.err), 7)
 ```
 
 ```{r mush_mclust_edda_cv,echo=F,warning=F,message=F}
@@ -860,7 +860,7 @@ for(i in 1:k){
 }
 
 # error rate
-mush.mclustda.edda.cv.error <- mean(mush.err)
+mush.mclustda.edda.cv.error <- round(mean(mush.err), 7)
 ```
 
 ```{r mush_mclust_edda_err,echo=F,include=F,warning=F,message=F}
@@ -896,7 +896,7 @@ kable(table("Pred."=pred.mush.svm.vsa, "Actual"=mush.test$poisonous),
       caption = "Confusion Matrix for vsa")
 
 # error rate
-mush.svm.vsa.error <- mean(pred.mush.svm.vsa != mush.test$poisonous)
+mush.svm.vsa.error <- round(mean(pred.mush.svm.vsa != mush.test$poisonous), 7)
 ```
 
 ```{r mush_svm_loocv,echo=F,warning=F,message=F}
@@ -922,7 +922,7 @@ for (i in 1:100) {
 }
 
 # error rate
-mush.svm.loocv.error <- mean(mush.loocv.err)
+mush.svm.loocv.error <- round(mean(mush.loocv.err), 7)
 ```
 
 ```{r mush_svm_cv,echo=F,warning=F,message=F}
@@ -960,7 +960,7 @@ kable(data.frame(mush.err),
       caption = "Prediction Error Rates for 5-fold cv")
 
 # error rate
-mush.svm.cv.error <- mean(mush.err)
+mush.svm.cv.error <- round(mean(mush.err), 7)
 ```
 
 ```{r mush_svm_err,echo=F,include=F,warning=F,message=F}
@@ -970,18 +970,12 @@ mush.errors <- rbind(mush.errors, mush.svm.col.err)
 
 ## Summary Results
 
-We can see from the summary that the test error rates are fairly close however, using 5-fold cross validation with MclustDA seems to result in the lowest error rate.  Due to the computational intensity, LOOCV was unable to fit all $8124$ observations to give an accurate result.  A sampling of 100 observations for each method results in an error rate of $0$ for McLustDA, and $0.16$ for Logistic Regression and SVM, which could be wrong since all of the observations were not used.
+We can see from the summary that the test error rates are very close however, using 5-fold cross validation with MclustDA seems to produce the lowest error rate.  Due to the computational intensity, LOOCV was unable to fit all $8124$ observations to give an accurate result.  A sampling of 100 observations for each method results in an error rate of $0$ for McLustDA, and $0.16$ for Logistic Regression and SVM, which could be wrong since all of the observations were not used.  KNN was not fit due to the error `too many ties in knn` and QDA was not fit due to the error `rank deficiency in group e`, which also occured in the previous homework assignment.
 
 ```{r mush_summ_err,echo=F,warning=F,message=F}
 colnames(mush.errors) <- c("Method", "VSA", "LOOCV", "5-Fold CV")
-kable(mush.errors, digits = 6,
-      caption = "Test Errors for different methods")
+kable(mush.errors, 
+      caption = "Test Error rates for different methods")
 
-# References
-#https://stackoverflow.com/questions/9666212/how-to-compute-error-rate-from-a-decision-tree
-#https://stats.stackexchange.com/questions/27351/compare-models-loccv-implementation-in-r
-# Retrieved: 03/07/18
 ```
-
-
 
