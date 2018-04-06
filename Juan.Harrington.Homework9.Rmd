@@ -1,0 +1,600 @@
+---
+title: "Homework 9"
+author: "Juan Harrington"
+date: "March 27, 2018"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# load libraries
+library(ISLR)
+library(MASS)
+library(boot)
+library(leaps)
+library(knitr)
+library(broom)
+library(gam)
+library(splines)
+library(ggplot2)
+
+# seed for reproducibility
+seed <- 702
+```
+
+# 1. Question 7.9.6
+
+## Part a
+
+We are asked to perform polynomial regression to predict `wage` using `age` on the `Wage` data from the `ISLR` package by using cross-validation to select the optimal degree $d$ for the polynomial.  We can see that the 4th or 9th degree is the optimal degree for the polynomial. We are then asked to use ANOVA to compare the results of hypothesis testing.
+
+```{r 6_a,echo=F,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# load Wage data 
+data(Wage)
+
+# cross validation glm
+cv.error <- rep(NA, 10)
+for (i in 1:10) {
+    wage.fit.glm <- glm(wage ~ poly(age, i), data = Wage)
+    cv.error[i] <- cv.glm(Wage, wage.fit.glm, K = 10)$delta[1]
+}
+#which.min(cv.error)
+
+# create standard plot
+plot(cv.error, type="b", 
+     xlab = "Degree", ylab = "MSE")
+title("Polynomial Regression")
+
+# create ggplot
+ggplot() + aes(x = 1:10, y = cv.error) + 
+              geom_line() + geom_point() +
+              scale_x_discrete(limits = c(1:10)) +
+              xlab("Degree") + ylab("MSE")  +
+  ggtitle("Polynomial Regression") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+By analyzing the p-values from ANOVA we can determine that either the 3rd or 9th degree polynomial appear to provide a reasonable fit to the data. 
+
+```{r,echo=F,warning=F,message=F}
+# fit ANOVA
+fit1 <- lm(wage ~ age, data = Wage)
+fit2 <- lm(wage ~ poly(age, 2), data = Wage)
+fit3 <- lm(wage ~ poly(age, 3), data = Wage)
+fit4 <- lm(wage ~ poly(age, 4), data = Wage)
+fit5 <- lm(wage ~ poly(age, 5), data = Wage)
+fit6 <- lm(wage ~ poly(age, 6), data = Wage)
+fit7 <- lm(wage ~ poly(age, 7), data = Wage)
+fit8 <- lm(wage ~ poly(age, 8), data = Wage)
+fit9 <- lm(wage ~ poly(age, 9), data = Wage)
+fit10 <- lm(wage ~ poly(age, 10), data = Wage)
+
+anova(fit1, fit2, fit3, fit4, fit5,
+           fit6, fit7, fit8, fit9, fit10)
+
+```
+
+We are asked to plot the resulting polynomial fit obtained.  A cubic polynomial is used based on the ANOVA testing.
+
+```{r,echo=F,warning=F,message=F}
+agelims <- range(Wage$age)
+age.grid <- seq(agelims[1], agelims[2])
+preds <- predict(fit3, newdata=list(age=age.grid), se=T) 
+se.bands <- preds$fit + cbind(2*preds$se.fit, -2*preds$se.fit)
+
+# create standard plot
+par(mfrow=c(1,1), mar=c(4.5,4.5,1,1), oma=c(0,0,4,0))
+plot(Wage$age, Wage$wage, xlim=agelims, cex=0.5, col="darkgrey",
+     xlab="age", ylab="wage")
+title("Degree-3 Polynomial", outer=T)
+lines(age.grid, preds$fit, lwd=2, col="purple")
+matlines(age.grid, se.bands, lwd=1, col="purple", lty=3)
+
+# references: 
+#https://stackoverflow.com/questions/9109156/ggplot-combining-two-plots-from-different-data-frames
+# retrieved: 03/23/18
+# create ggplot
+pred.df <- data.frame(preds$fit)
+se.bands.df <- data.frame(se.bands)
+ggplot() + xlim(agelims) + theme_bw() +
+  geom_point(data = Wage, aes(age, wage), col = "grey") +
+  geom_line(data = pred.df, aes(x = age.grid,y = pred.df[,1]), color = "purple") +
+  geom_line(data = se.bands.df, aes(x = age.grid, y = se.bands.df[,1]), color = "purple", lty = 3) +
+  geom_line(data = se.bands.df, aes(x = age.grid, y = se.bands.df[,2]), color = "purple", lty = 3) +
+  ggtitle("Degree-3 Polynomial") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Part b
+
+We are asked to perform a step function to predict `wage` using `age`, and perform cross-validation to choose the optimal number of cuts.
+
+```{r,echo=F,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+cv.error <- rep(NA, 10)
+for (i in 2:10) {
+    Wage$age.cut <- cut(Wage$age, i)
+    fit.glm <- glm(wage ~ age.cut, data = Wage)
+    cv.error[i] <- cv.glm(Wage, fit.glm, K = 10)$delta[1]
+}
+
+# create standard plot
+plot(2:10, cv.error[-1], xlab = "Cuts", ylab = "MSE", type = "b")
+title("Step Function")
+
+# create ggplot
+ggplot() + aes(x = 2:10, y = cv.error[-1]) + 
+              geom_line() + geom_point() +
+              scale_x_discrete(limits = c(2:10)) +
+              xlab("Cuts") + ylab("MSE") +
+  ggtitle("Step Function") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+Analyzing the step function plot we see that 8 cuts are ideal and a plot of the fit with eight bands is created.
+
+```{r,echo=F,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# fit cut
+cut.fit <- glm(wage ~ cut(age,8), data = Wage)
+preds <- predict(cut.fit, newdata = list(age=age.grid), se = T)
+se.bands <- preds$fit + cbind(2*preds$se.fit, -2*preds$se.fit)
+
+# create standard plot
+plot(Wage$age, Wage$wage, xlim = agelims, cex = 0.5, col = "darkgrey",
+       xlab="age", ylab="wage")
+title("Fit with 8 Age Bands")
+lines(age.grid, preds$fit, lwd = 2, col = "purple")
+matlines(age.grid, se.bands, lwd = 1, col = "purple", lty = 3)
+
+# create ggplot
+pred.df <- data.frame(preds$fit)
+se.bands.df <- data.frame(se.bands)
+ggplot() + xlim(agelims) + theme_bw() +
+  geom_point(data = Wage, aes(age, wage), col = "grey") +
+  geom_line(data = pred.df, aes(x = age.grid,y = pred.df[,1]), color = "purple") +
+  geom_line(data = se.bands.df, aes(x = age.grid, y = se.bands.df[,1]), color = "purple", lty = 3) +
+  geom_line(data = se.bands.df, aes(x = age.grid, y = se.bands.df[,2]), color = "purple", lty = 3) +
+  ggtitle("Fit with 8 Age Bands") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+# 2. Question 7.9.9
+
+## Part a
+
+We are asked to use the `poly()` function to fit a cubic polynomial regression to predict `nox` using `dis` from the `Boston` dataset in the `MASS` library.  Looking at the p-values we can determine that all the polynomial terms are significant.  The resulting data and polynomial fits are plotted showing a pretty smooth curve fitting the data.
+
+```{r 9_a,echo=F,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# load data
+data(Boston)
+
+# fit cubic polynomial regression
+boston.lm.fit <- lm(nox ~ poly(dis, 3), data = Boston)
+boston.lm.summ <- summary(boston.lm.fit)
+
+# summary
+kable(tidy(boston.lm.summ),
+      spation = "Polynomial Regression Summary")
+
+dislims <- range(Boston$dis)
+dis.grid <- seq(from = dislims[1], to = dislims[2], by = 0.1) 
+preds <- predict(boston.lm.fit, 
+                 newdata =list(dis = dis.grid), 
+                 se = T)
+se.bands <- preds$fit + cbind(2*preds$se.fit, -2*preds$se.fit)
+
+# create standard plot
+par(mfrow=c(1,1), mar=c(4.5,4.5,1,1), oma=c(0,0,4,0))
+plot(Boston$dis, Boston$nox, xlim=dislims, cex=0.5, col="darkgrey",
+     xlab="dis", ylab="nox")
+title("Degree-3 Polynomial", outer = T)
+lines(dis.grid, preds$fit, lwd=2, col="purple")
+matlines(dis.grid, se.bands, lwd=1, col="purple", lty=3)
+
+# create ggplot
+pred.df <- data.frame(preds$fit)
+se.bands.df <- data.frame(se.bands)
+ggplot() + xlim(dislims) + theme_bw() +
+  geom_point(data = Boston, aes(dis, nox), col = "grey") +
+  geom_line(data = pred.df, aes(x = dis.grid,y = pred.df[,1]), color = "purple") +
+  geom_line(data = se.bands.df, aes(x = dis.grid, y = se.bands.df[,1]), color = "purple", lty = 3) +
+  geom_line(data = se.bands.df, aes(x = dis.grid, y = se.bands.df[,2]), color = "purple", lty = 3) +
+  ggtitle("Degree-3 Polynomial") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Part b
+
+We are asked to plot the polynomial fits for a range of different polynomial degress (1 to 10), and report the associated residual sum of squares.  It looks like the RSS decreases as the degree of the polynomial increases with the 10th degree being the minimum.
+
+```{r,echo=F,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+rss.error <- rep(NA, 10)
+for (i in 1:10) {
+    lm.fit <- lm(nox ~ poly(dis, i), data = Boston)
+    rss.error[i] <- sum(lm.fit$residuals^2)
+}
+
+# RSS 
+rss.error.df <- data.frame("Degree"=c(1:10),"RSS"=rss.error)
+kable(rss.error.df, 
+      caption = "RSS for Range of Polynomial Fits")
+
+# create standard plot
+plot(rss.error, type="b",
+     xlab = "Degree", ylab = "RSS")
+title("Polynomial Fits")
+
+# create ggplot
+ggplot() + aes(x = 1:10, y = rss.error) + 
+              geom_line() + geom_point() +
+              scale_x_discrete(limits = c(1:10)) +
+              xlab("Degree") + ylab("RSS") +
+  ggtitle("Polynomial Fits") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Part c
+
+We are asked to perform cross-validation or another approach to select the optimal degree for the polynomial.  Using cross-validation the optimal fit seems to be with the 3rd or 4th degree polynomial and then it gets erratic after the 7th degree.
+
+```{r,echo=F,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# cross-validation fittin glm poly
+cv.error <- rep(NA, 10)
+for (i in 1:10) {
+    glm.fit <- glm(nox ~ poly(dis, i), data = Boston)
+    cv.error[i] <- cv.glm(Boston, glm.fit, K = 10)$delta[1]
+}
+
+# create standard plot
+plot(cv.error, type = "b",
+     xlab = "Degree", ylab = "MSE")
+title("Cross validation")
+
+# create ggplot
+ggplot() + aes(x = 1:10, y = cv.error) + 
+              geom_line() + geom_point() +
+              scale_x_discrete(limits = c(1:10)) +
+              xlab("Degree") + ylab("MSE") +
+  ggtitle("Cross validation") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Part d
+
+We are asked to use the `bs()` function to fit a regression spline to predict `nox` using `dis`.  The knots were selected based on the lab example of using the `df` option to product a spline with knots at uniform quantiles of data.  With $df=4$ it is determined that there is only 1 knot at the 50th percentile.
+
+```{r,echo=F,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# fit using bs()
+fit.bs <- lm(nox ~ bs(dis, df = 4), data = Boston)
+
+# summary
+kable(tidy(fit.bs),
+      caption = "Linear Regression Summary using bs()")
+
+# standard plot
+pred <- predict(fit.bs, newdata = list(dis = dis.grid), se = T)
+se.bands <- cbind(preds$fit+2*preds$se.fit, preds$fit-2*preds$se.fit)
+
+# standard plot
+plot(nox ~ dis, data = Boston, col = "darkgrey",
+     xlab = "dis", ylab = "nox")
+title("Regression Spline")
+lines(dis.grid, pred$fit, col = "purple", lwd = 2)
+lines(dis.grid, pred$fit+2*pred$se, lty = "dashed")
+lines(dis.grid, pred$fit-2*pred$se, lty = "dashed")
+
+# create ggplot
+pred.df <- data.frame(pred$fit)
+se.bands.df <- data.frame(se.bands)
+ggplot() + theme_bw() +
+  geom_point(data = Boston, aes(dis, nox), col = "grey") +
+  geom_line(data = pred.df, aes(x = dis.grid,y = pred.df[,1]), color = "purple") +
+  geom_line(data = se.bands.df, aes(x = dis.grid, y = se.bands.df[,1]), color = "purple", lty = 3) +
+  geom_line(data = se.bands.df, aes(x = dis.grid, y = se.bands.df[,2]), color = "purple", lty = 3) +
+  ggtitle("Regression Spline") + theme(plot.title = element_text(hjust = 0.5))
+
+
+# set df to select knots at uniform quantiles of `dis`
+# only 1 knot at 50th percentile
+#dim(bs(Boston$dis,df=4))
+kable(attr(bs(Boston$dis,df=4),"knots"), 
+      caption = "Knots")
+```
+
+## Part e
+
+We are asked to fit a regression spline for a range of degrees of freedom, and plot the resulting fits and report the resulting RSS.  We see that RSS decreases until 8 and then slightly increases after that and then decreases again with a degree of 10 having the lowest RSS.
+
+```{r,echo=F,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# fit regression spline using a range of df
+rss.error <- rep(NA, 8)
+for (i in 3:10) {
+    fit.bs <- lm(nox ~ bs(dis, df = i), data = Boston)
+    rss.error[i-2] <- sum(fit.bs$residuals^2)
+}
+
+# RSS 
+rss.error.df <- data.frame("Degree"=c(3:10),"RSS"=rss.error)
+kable(rss.error.df, 
+      caption = "RSS for Range of Regression Splines")
+
+# create standard plot
+plot(3:10, rss.error, type = "b",
+     xlab = "Degree", ylab = "RSS",
+     main = "Regression Spline")
+
+# create ggplot
+ggplot() + aes(x = 3:10, y = rss.error) + 
+              geom_line() + geom_point() +
+              scale_x_discrete(limits = c(3:10)) +
+              xlab("Degree") + ylab("RSS") +
+  ggtitle("Regression Spline") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Part f
+
+We are asked to perform cross-validation or another approach in order to select the best degree of freedom for a regression spline on the data.  When doing so the `warning: some 'x' values beyond boundary knots may cause ill-conditioned bases` is reported. We see that the error starts to increase and then decreases with it staying fairly the same between the 5th and 7th degree before decreasing at the 8th degree.  It then increases again before decreasing at the 10th degree. The optimal degree of freedom appears to be at $8$.  
+
+```{r,echo=F,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# cross-validation fitting glm to select best df
+cv.error <- rep(NA, 8)
+for (i in 3:10) {
+    fit.bs <- glm(nox ~ bs(dis, df = i), data = Boston)
+    cv.error[i-2] <- cv.glm(Boston, fit.bs, K = 10)$delta[1]
+}
+
+# create standard plot
+plot(3:10, cv.error, type = "b", 
+     xlab = "Degree", ylab = "MSE")
+title("Cross validation")
+
+# create ggplot
+ggplot() + aes(x = 3:10, y = cv.error) + 
+              geom_line() + geom_point() +
+              scale_x_discrete(limits = c(3:10)) +
+              xlab("Degree") + ylab("MSE") +
+  ggtitle("Cross validation") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+# 3. Question 7.9.10
+
+## Part a
+
+We are asked to split the `College` data from `ISLR` into a training and test set.  This is done using a 60/40 split.  The out-of-state tuition is used as the response and the other variables as the predictor.  A forward stepwise selection is done on the training set to identify a satisfactory model using a subset of the predictors.  The lowest error is determined to be using 7 variables.
+
+```{r,echo=F,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# load data
+data(College)
+
+# split data into training and test sets using 60/40 split
+rows <- sample(nrow(College), nrow(College)*0.6)
+college.train <- College[rows, ]
+college.test <- College[-rows, ]
+
+# predict function from chapter 6 labs
+predict.regsubsets <- function(object, newdata, id, ...){
+  form <- as.formula(object$call[[2]])
+  mat <- model.matrix(form, newdata)
+  coefi <- coef(object, id=id)
+  xvars <- names(coefi)
+  mat[,xvars]%*%coefi
+}
+
+# perform forward stepwise selection
+college.fit.fwd <- regsubsets(Outstate ~ ., data = college.train, 
+                              nvmax = 17, method = "forward")
+college.fit.fwd.summary <- summary(college.fit.fwd)
+
+# predict and determine best model
+err.fwd <- rep(NA, ncol(College)-1)
+for(i in 1:(ncol(College)-1)) {
+  pred.fwd <- predict(college.fit.fwd, college.test, id=i)
+  err.fwd[i] <- mean((college.test$Outstate - pred.fwd)^2)
+}
+
+# get selected variables
+kable(coef(college.fit.fwd, which.min(err.fwd)),
+           caption = "Coefficients in best subset selection")
+```
+
+## Part b
+
+We are asked to fit GAM on the training set using the out-of-state tuition as the response and features selected from (a) as the predictors.  The results are plotted.
+
+```{r,echo=F,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# fit gam on selected variables from (a) using training set
+college.fit.gam <- gam(Outstate ~ Private + 
+                         s(Room.Board) + 
+                         s(Personal) + 
+                         s(Terminal) + 
+                         s(perc.alumni) + 
+                         s(Expend) + 
+                         s(Grad.Rate), 
+                       data = college.train)
+
+# standard plot
+par(mfrow = c(2, 3))
+plot.gam(college.fit.gam, se = T, col = "purple")
+```
+
+## Part c
+
+Evaluating the model we see that the test R-squared is $0.7985109$ and MSE is $3205831$ with 7 predictors based on the variables from best subset selection from (a).
+
+```{r,echo=F,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# evaluate model
+preds <- predict(college.fit.gam, college.test)
+mse <- mean((college.test$Outstate - preds)^2)
+tss <- mean((college.test$Outstate - mean(college.test$Outstate))^2)
+rss <- 1 - mse / tss
+error <- cbind("MSE"=mse,"RSS"=rss)
+kable(error, caption = "Model Evaluation")
+```
+
+## Part d
+
+Inspecting the ANOVA p-values from the GAM summary there is strong evidence of non-linear effects for `Expend` and `Personal`, with some non-linear effects for `Terminal` and `Grad.Rate`.  `Room.Board` and `perc.alumni` have no evidence of a non-linear effect.
+
+```{r,echo=F,warning=F,message=F}
+# summary
+college.sum <- summary(college.fit.gam)
+kable(tidy(college.sum$parametric.anova), 
+      caption = "ANOVA Parametric Effects")
+kable(tidy(college.sum$anova), 
+      caption = "ANOVA Nonparametric Effects")
+```
+  
+# 4. Question 7.9.11 
+
+Bonus! 
+
+## Part a
+
+We are asked to generate a response `Y` and two predictors `X1` and `X2`, with $n = 100$.
+
+```{r,echo=F,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# generate Y and 2 predictors with n=100
+X1 <- rnorm(100)
+X2 <- rnorm(100)
+beta_0 <- -2.7
+beta_1 <- 0.6
+beta_2 <- 5.5
+eps <- rnorm(100, sd = 1)
+Y <- beta_0 + beta_1*X1 + beta_2*X2 + eps
+
+# create plot
+par(mfrow=c(1,1))
+plot(Y)
+title("Generated Betas vs Y")
+```
+
+## Part b
+
+We are asked to initialize $\hat{B_1}$.  This is done using a value of $3$.
+
+```{r,echo=F,warning=F,message=F}
+# initialize beta hat = 3
+bhat_1 <- 3
+```
+
+## Part c
+
+We are asked to keep $\hat{B_1}$ fixed and fit the model $Y - \hat{B_1X_1} = {B_0}+{B_2X_2} + \epsilon$.
+
+```{r,echo=F,warning=F,message=F}
+# fit model
+a <- Y - bhat_1*X1
+bhat_2 <- lm(a ~ X2)$coef[2]
+```
+
+## Part d
+
+We are asked to keep $\hat{B_2}$ fixed and fit the model $Y - \hat{B_2X_2} = {B_0}+{B_1X_1} + \epsilon$.
+
+```{r,echo=F,warning=F,message=F}
+a <- Y - bhat_2*X2
+bhat_1 <- lm(a ~ X1)$coef[2]
+```
+
+## Part e
+
+We are asked to write a loop to repeat (c) and (d) 1000 times reporting the estimates of $\hat{B_0}$, $\hat{B_1}$, and $\hat{B_2}$ at each iteration of the loop and plot.
+
+```{r,echo=F,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+bhat_0 <- rep(0, 1000)
+bhat_1 <- rep(0, 1000)
+bhat_2 <- rep(0, 1000)
+for (i in 1:1000) {
+  a <- Y - bhat_1[i] * X1
+  bhat_2[i] <- lm(a ~ X2)$coef[2]
+  a <- Y - bhat_2[i] * X2
+  bhat_1[i] <- lm(a ~ X1)$coef[2]
+  bhat_0[i] <- lm(a ~ X1)$coef[1]
+}
+
+# plot
+plot(bhat_0, type="l", col="#999999", lwd=2, xlab="Iterations", 
+     ylab="beta estimates", ylim=c(-4,6))
+lines(bhat_1, col="#E69F00", lwd=2)
+lines(bhat_2, col="#56B4E9", lwd=2)
+legend(x=600,y=4.8, c("bhat_0", "bhat_1", "bhat_2"),
+       lty = c(1,1,1,2), 
+       col = c("#999999","#E69F00","#56B4E9"))
+title("Linear Regression Coefficients")
+```
+
+## Part f
+
+We are asked to compare (e) to the results of simply performing multiple linear regression to predict $Y$ using $X1$ and $X2$.  The dotted lines show that the estimated multiple regression coefficients match exactly with the coefficients obtained using backfitting.
+
+```{r,echo=F,warning=F,message=F}
+# set seed
+set.seed(seed)
+
+# fit linear regression
+fit.lm <- lm(Y ~ X1 + X2)
+kable(coef(fit.lm), caption = "Coefficients")
+
+# plot
+plot(bhat_0, type="l", col="#999999", lwd=2, xlab="Iterations", 
+     ylab="beta estimates", ylim=c(-4,6))
+lines(bhat_1, col="#E69F00", lwd=2)
+lines(bhat_2, col="#56B4E9", lwd=2)
+abline(h=coef(fit.lm)[1], lty="dashed", lwd=3, col="#009E73")
+abline(h=coef(fit.lm)[2], lty="dashed", lwd=3, col="#F0E442")
+abline(h=coef(fit.lm)[3], lty="dashed", lwd=3, col="#0072B2")
+legend(x=600, y=4.8, c("bhat_0", "bhat_1", "bhat_2", "multiple regression"),
+       lty = c(1,1,1,2), 
+       col = c("#999999","#E69F00","#56B4E9"))
+title("Linear Regression Coefficients")
+```
+
+## Part g
+
+When the relationship between Y and X's is linear, one iteration is sufficient to get a good approximation of regression coefficients estimates.
+
+```{r,echo=F,warning=F,message=F}
+iter.df <- data.frame(Iteration = 1:1000, bhat_0, bhat_1, bhat_2)
+kable(head(iter.df),
+      caption = "Iterations")
+```
+
+

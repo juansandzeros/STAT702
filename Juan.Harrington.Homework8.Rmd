@@ -1,0 +1,1214 @@
+---
+title: "Homework 8"
+author: "Juan Harrington"
+date: "March 20, 2018"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# load libraries
+library(ISLR)
+library(glmnet)
+library(MASS)
+library(pls)
+library(leaps)
+library(knitr)
+library(broom)
+library(ggplot2)
+library(gridExtra)
+library(rpart)
+library(rpart.plot)
+library(caret)
+library(mclust)
+library(e1071)
+library(vcd)
+library(RColorBrewer)
+
+# seed # for reproducibility
+seed <- 702
+
+# References:  https://www.youtube.com/watch?v=MMN35r-zbQM
+#              https://www.youtube.com/watch?v=BU2gjoLPfDc
+# Retrieved: 03/16/18
+```
+
+# 1. Question 6.8.4 pg 260
+
+Suppose we estimate the regression coefficients in a linear regression model by minimizing
+$$\sum_{i=1}^{n} (y_i - \beta_0 - \sum_{j=1}^{p} \beta_j x_{i,j})^2 + \lambda \sum_{j=1}^{p} \beta_j^2$$
+for a particular value of $\lambda$.
+
+```{r 6_8_4,echo=F,include=F,warning=F,message=F}
+# note: figure 6.5 on page 218
+
+#In ridge regression, we add a penalty by way of a tuning parameter called lambda which is chosen using cross validation. The idea is to make the fit small by making the residual sum or squares small plus adding a shrinkage penalty.
+```
+
+## Part a
+
+As we increase $\lambda$ from $0$, the training RSS will steadily increase.  This is because the model is less flexible as restrictions on $\beta$ coefficients increases.
+
+## Part b
+
+As we increase $\lambda$ from $0$, the test RSS will decrease initially, and then eventually start increasing in a U shape.  As the model becomes less flexible the test RSS decreases at first and then increased when overfitting starts.
+
+## Part c
+
+As we increase $\lambda$ from $0$, the variance will steadily decrease with more constraints and at the expense of a slight increase in bias.  This is because the model decreases in flexibility.
+
+## Part d
+
+As we increase $\lambda$ from $0$, the (squared) bias will steadily increase as the model becomes less flexible causing the increase in bias.
+
+## Part e
+
+As we increase $\lambda$ from $0$, the irreducible error will remain a constant value.  It is not related to model selection and therefore independent of $\lambda$.
+
+# 2. Question 6.8.9 pg 263
+
+We are asked to predict the number of applications received using the other variables in the `College` data set from the `ISLR` package.
+
+## Part a
+
+First, we split the `College` data into training and test data sets.  A 60/40 split is used.
+
+```{r college_load,echo=F,include=F,warning=F,message=F}
+# load college data from ISLR
+data(College)
+
+# set seed 
+set.seed(seed)
+
+# create training and test sets
+rows <- sample(nrow(College), nrow(College)*0.6)
+college.train <- College[rows, ]
+college.test <- College[-rows, ]
+```
+
+## Part b 
+
+We are asked to fit a linear model using least squares on the training set.  The test error is $1337182$.
+
+```{r college_lm,echo=F,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+# fit linear regression
+fit.college.lm <- lm(Apps ~ ., data = college.train)
+
+# print summary
+kable(tidy(fit.college.lm),
+      caption = "Linear Regression Summary")
+
+# predict
+pred.college.lm <- predict(fit.college.lm, college.test)
+college.lm.err <- mean((pred.college.lm - college.test$Apps)^2)
+
+# display test error rate
+kable(college.lm.err, col.names = "MSE",
+      caption = "Test Error")
+```
+
+## Part c
+
+We are asked to fit a ridge regression model on the training set, with $\lambda$ chosen by cross validation.  The test error is $1453865$ with a best lambda value of $24.77076$.
+
+```{r college_ridge,echo=F,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+# create a matrix from orig data
+#college.x.mat <- model.matrix(Apps ~ ., College)[,-1]
+
+# create matrix for training set and test set
+train.mat <- model.matrix(Apps ~ ., data = college.train)[,-1]
+test.mat <-  model.matrix(Apps ~ ., data = college.test)[,-1]
+
+# define grid to cover range of lambda
+grid <- 10 ^ seq(10, -2, length = 100)
+
+# fit ridge regression using cross validation to find optimal lambda
+fit.ridge.cv <- cv.glmnet(train.mat, college.train$Apps, 
+                          alpha = 0, lambda = grid)
+bestlam.ridge <- fit.ridge.cv$lambda.min 
+
+plot(fit.ridge.cv)
+
+# fit ridge regression using best lambda
+college.ridge.mod <- glmnet(train.mat, college.train$Apps, 
+                            alpha = 0, lambda = bestlam.ridge)
+
+# predict w chosen lambda
+pred.college.ridge <- predict(college.ridge.mod, 
+                              s = bestlam.ridge, 
+                              newx = test.mat)
+
+# calculate test error
+college.ridge.err <- mean((pred.college.ridge - college.test$Apps)^2)
+
+# ridge coefficients
+college.ridge.coef <- predict(college.ridge.mod, type = "coefficients",
+                              s = bestlam.ridge)[1:18,]
+
+# display test error rate
+kable(college.ridge.err, col.names = "MSE",
+      caption = "Test Error")
+```
+
+## Part d
+
+We are asked to fit a lasso model on the training set, with $\lambda$ chosen by cross validation.  The test error is $1369592$ with a best lambda value of $8.111308$.  The model also has $15$ non-zero coefficient estimates.  The coefficient estimates for the variables `Enroll` and `Books` went to zero.
+
+```{r college_lasso,echo=F,warning=F,message=F}
+# Reference: https://www.youtube.com/watch?v=fAPCaue8UKQ
+# Retrieved: 03/16/18
+
+# set seed 
+set.seed(seed)
+
+# create matrix for training set and test set
+train.mat <- model.matrix(Apps ~ ., data = college.train)[,-1]
+test.mat <- model.matrix(Apps ~ ., data = college.test)[,-1]
+
+# define grid to cover range of lambda
+grid <- 10 ^ seq(10, -2, length = 100)
+
+# fit ridge regression using lasso and cross validation to get best lambda 
+fit.lasso.cv <- cv.glmnet(train.mat, college.train$Apps, 
+                          alpha = 1, lambda = grid)
+bestlam.lasso <- fit.lasso.cv$lambda.min 
+
+plot(fit.lasso.cv)
+
+# fit lasso regression using best lambda
+college.lasso.mod <- glmnet(train.mat, college.train$Apps, 
+                            alpha = 1, lambda = bestlam.lasso)
+
+# predict
+pred.college.lasso <- predict(college.lasso.mod, 
+                              s = bestlam.lasso, 
+                              newx = test.mat)
+
+# calculate test error
+college.lasso.err <- mean((pred.college.lasso - college.test$Apps)^2)
+
+# display test error rate
+kable(college.lasso.err, col.names = "MSE",
+      caption = "Test Error")
+
+# non-zero coefficients that have been fit
+coef.lasso <- college.lasso.mod$beta[,1]
+#predict(college.lasso.mod, type = "coefficients", s = bestlam)[1:18,]
+
+# display non zero coefficient estimates
+kable(coef.lasso[coef.lasso != 0],
+      caption = "Non zero coefficient estimates")
+
+```
+
+## Part e
+
+We are asked to fit a principcal component regression (PCR) model on the training set, with $M$ chosen by cross validation.  The test error is $1337182$ with the lowest cross-validation occuring when $M = 17$ components are used.
+
+```{r college_pcr,echo=F,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+# fit pcr
+fit.college.pcr <- pcr(Apps ~ ., data = college.train,
+                       scale = T, validation = "CV")
+
+validationplot(fit.college.pcr, val.type = "MSEP")
+
+# predict
+pred.college.pcr <- predict(fit.college.pcr, college.test, ncomp = 17)
+
+# calculate test error
+college.pcr.err <- mean((pred.college.pcr - college.test$Apps)^2)
+
+# display test error
+kable(college.pcr.err, col.names = "MSE",
+      caption = "Test Error")
+```
+
+## Part f
+
+We are asked to fit a partial least squares (PLS) model on the training set, with $M$ chosen by cross validation.  The test error is $1368993$ with the lowest cross-validation occuring when $M = 10$ components are used.
+
+```{r college_pls,echo=F,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+# fit pls
+fit.college.pls <-  plsr(Apps ~ ., data = college.train, 
+                         scale = T, validation = "CV")
+
+validationplot(fit.college.pls, val.type = "MSEP")
+
+# predict
+pred.college.pls <- predict(fit.college.pls, college.test, ncomp = 10)
+
+# calculate test error
+college.pls.err <- mean((pred.college.pls - college.test$Apps)^2)
+
+# display test error
+kable(college.pls.err, col.names = "MSE",
+      caption = "Test Error")
+```
+
+## Part g
+
+Using the test R-square statistic we can see how accurately the number of college applications are predicted.  Based on the test rates summary table all models predict college applications with similar high accuracy, with Least Squares and PCR having the highest R-square test rate.
+
+```{r college_mse,echo=F,warning=F,message=F}
+mse.table <- rbind(cbind("Linear Regression", college.lm.err))
+mse.table <- rbind(mse.table, cbind("Ridge Regression", college.ridge.err))
+mse.table <- rbind(mse.table, cbind("Lasso", college.lasso.err))
+mse.table <- rbind(mse.table, cbind("PCR", college.pcr.err))
+mse.table <- rbind(mse.table, cbind("PLS", college.pls.err))
+colnames(mse.table) <- c("Method", "MSE")
+kable(mse.table, caption = "MSE summary")
+```
+
+```{r college_r2,echo=F,warning=F,message=F}
+# Reference: https://drsimonj.svbtle.com/ridge-regression-with-glmnet
+# Retrieved: 03/16/18
+# Compute R^2 from true and predicted values
+rsquare <- function(true, predicted) {
+  sse <- sum((predicted - true)^2)
+  sst <- sum((true - mean(true))^2)
+  rsq <- 1 - sse / sst
+
+  return (round(rsq, 6))
+}
+
+lm.r2 <- rsquare(college.test$Apps, pred.college.lm)
+ridge.r2 <- rsquare(college.test$Apps, pred.college.ridge)
+lasso.r2 <- rsquare(college.test$Apps, pred.college.lasso)
+pcr.r2 <- rsquare(college.test$Apps, pred.college.pcr)
+pls.r2 <- rsquare(college.test$Apps, pred.college.pls)
+
+# build error table
+err.table <- rbind(cbind("Linear Regression", lm.r2))
+err.table <- rbind(err.table, cbind("Ridge Regression", ridge.r2))
+err.table <- rbind(err.table, cbind("Lasso", lasso.r2))
+err.table <- rbind(err.table, cbind("PCR", pcr.r2))
+err.table <- rbind(err.table, cbind("PLS", pls.r2))
+colnames(err.table) <- c("Method", "R-squared")
+
+# display error table results
+kable(err.table, caption = "Test R-Squared summary")
+```
+
+# 3. Question 6.8.11 pg 26
+
+## Part a
+
+```{r boston_load,echo=F,include=FALSE,warning=F,message=F}
+# load Boston data from MASS
+data(Boston)
+
+# set seed 
+set.seed(seed)
+
+# split data into training and test data
+# validation set approach
+rows <- sample(nrow(Boston), nrow(Boston)*0.6)
+boston.train <- Boston[rows, ]
+boston.test <- Boston[-rows, ]
+boston.train.mat <- model.matrix(crim ~ ., data = boston.train)[,-1]
+boston.test.mat <- model.matrix(crim ~ ., data = boston.test)[,-1]
+```
+
+We are asked to perform regression methods such as best subset selection, lasso, ridge regression, and PCR to try and predict per capita crime rate in the `Boston` dataset from the `ISLR` package.  
+
+```{r boston_fullmod,echo=F,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+# Randomize data
+permut.n <- sample(1:nrow(Boston), nrow(Boston))
+# Create 10 equally sized folds
+folds <- cbind(sort(rep(seq(1, 10, 1), 51))[1:nrow(Boston)], permut.n)
+
+# Create empty data frame to store error rates
+boston.err <- NULL
+
+# perform 10-fold cross validation
+for(i in 1:10){
+  # segment the data by fold using the which() function 
+  testIndexes <- which(folds == i, arr.ind = T)
+  testData <- Boston[testIndexes, ]
+  trainData <- Boston[-testIndexes, ]
+
+  # perform linear regression using training data
+  boston.lm <- lm(crim ~ ., data = trainData)
+  # predict
+  boston.pred <- predict(boston.lm, testData)
+  # calculate error and add to array
+  boston.err[i] <- mean((testData$crim - boston.pred)^2)  
+}
+
+boston.lm.err <- mean(boston.err)
+```
+
+## Best Subset Selection
+
+For best subset selection we see that cross-validation selects a 9-variables model.
+
+```{r boston_regsubset,echo=F,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+# Reference: https://www.youtube.com/watch?v=HkpECgfs_Pk
+# Retrieved: 03/18/18
+
+# predict function from chapter 6 labs
+predict.regsubsets <- function(object, newdata, id, ...){
+  form <- as.formula(object$call[[2]])
+  mat <- model.matrix(form, newdata)
+  coefi <- coef(object, id=id)
+  xvars <- names(coefi)
+  mat[,xvars]%*%coefi
+}
+
+# cross validation
+k <- 10
+folds <- sample(1:k, nrow(Boston), replace = T)
+boston.ncols <- ncol(Boston) - 1
+cv.errors <- matrix(NA, k, 13, dimnames = list(NULL, paste(1:13)))
+
+# 10-fold cross validation to find best model with lowest test error
+for (j in 1:k) {
+  best.fit <- regsubsets(crim ~ ., data = Boston[folds != j, ], 
+                         nvmax = boston.ncols, method = "forward")
+  # train on all the obs except for those in the k-fold
+  for (i in 1:boston.ncols) {
+    pred <- predict(best.fit, Boston[folds == j, ], id = i)
+    #pred <- predict(best.fit, boston.test, id = i)
+    cv.errors[j, i] <- mean((Boston$crim[folds == j] - pred)^2)
+  }
+}
+
+# errors
+mse.cv <- sqrt(apply(cv.errors, 2, mean))
+
+# plot
+par(mfrow=c(1,1))
+plot(mse.cv, pch = 19, type = "b", 
+     xlab = "Number of variables", ylab = "CV error",
+     main = "10-fold cross validation")
+
+# perform best subset selection on full dataset to obtain the 9-variable model
+regfit.boston <- regsubsets(crim ~ ., Boston, nvmax = boston.ncols)
+kable(coef(regfit.boston, 9), caption = "Coefficients for 9-variable model")
+
+# fit a linear model to boston training data with the 9 variables.
+boston.lm.9 <- lm(crim ~ zn + indus + nox + dis + rad + 
+                   ptratio + black + lstat + medv, 
+                 data = boston.train)
+
+# predict logistic regression model on best subset variables
+pred.boston.lm.9 <- predict(boston.lm.9, newdata = boston.test)
+
+# MSE for the lm model with best subset variables
+boston.sub.err <- mean((pred.boston.lm.9 - boston.test$crim)^2)
+```
+
+## Ridge Regression
+
+The best lambda for ridge regression is $0.869749$.    
+
+```{r boston_ridge,echo=F,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+# define grid to cover range of lambda
+grid <- 10 ^ seq(10, -2, length = 100)
+
+# Ridge Regression
+boston.fit.ridge <- cv.glmnet(boston.train.mat, boston.train$crim, 
+                           alpha = 0, lambda = grid)
+boston.ridge.lambda <- boston.fit.ridge$lambda.min
+
+# fit ridge regression using best lambda
+boston.ridge.mod <- glmnet(boston.train.mat, boston.train$crim, 
+                            alpha = 0, lambda = boston.ridge.lambda)
+
+# predict
+boston.pred.ridge <- predict(boston.ridge.mod, 
+                             s = boston.ridge.lambda, 
+                             newx = boston.test.mat)
+# test error
+boston.ridge.err <- mean((boston.pred.ridge - boston.test$crim)^2)  
+```
+
+## LASSO
+
+The best lambda for lasso is $0.1629751$. 
+
+```{r boston_lasso,echo=F,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+# define grid to cover range of lambda
+grid <- 10 ^ seq(10, -2, length = 100)
+
+# Lasso Regression
+boston.fit.lasso <- cv.glmnet(boston.train.mat, boston.train$crim, 
+                              alpha = 1, lambda = grid)
+boston.lasso.lambda <- boston.fit.lasso$lambda.min
+
+#plot(boston.fit.lasso)
+
+# fit ridge regression using best lambda
+boston.lasso.mod <- glmnet(boston.train.mat, boston.train$crim, 
+                            alpha = 1, lambda = boston.lasso.lambda)
+
+# predict
+boston.pred.lasso <- predict(boston.lasso.mod, 
+                             s = boston.lasso.lambda, 
+                             newx = boston.test.mat)
+# test error
+boston.lasso.err <- mean((boston.test$crim - boston.pred.lasso)^2) 
+
+#boston.coef.lasso <- boston.lasso.mod$beta[,1]
+```
+
+## PCR
+
+The lowest cross-validation for PCR occuring when $M = 13$ components are used with an adjusted CV of $7.728$.
+
+```{r boston_pcr,echo=F,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+# PCR
+boston.fit.pcr <- pcr(crim ~ ., data = boston.train, 
+                      scale = T, validation = "CV")
+#summary(boston.fit.pcr)
+# plot
+validationplot(boston.fit.pcr, val.type = "MSEP")
+
+# predict
+boston.pred.pcr <- predict(boston.fit.pcr, boston.test, ncomp = 13)
+
+# test error
+boston.pcr.err <- mean((boston.test$crim - boston.pred.pcr)^2)  
+```
+
+## PLS
+
+The lowest cross-validation for PLS occurs when $M = 11$ components are used with an adjusted CV of $7.727$.
+
+```{r boston_pls,echo=F,warning=F,message=F}
+# set seed 
+set.seed(seed)
+
+# PCR
+boston.fit.pls <- plsr(crim ~ ., data = boston.train, 
+                      scale = T, validation = "CV")
+#summary(boston.fit.pls)
+# plot
+validationplot(boston.fit.pls, val.type = "MSEP")
+
+# predict
+boston.pred.pls <- predict(boston.fit.pcr, boston.test, ncomp = 11)
+
+# test error
+boston.pls.err <- mean((boston.test$crim - boston.pred.pls)^2)  
+```
+
+## Part b
+
+Cross validation is used to calcuate the MSE for evaluating performance.  The Best Subset model has the lowest MSE and would be our chosen model.  
+
+```{r boston_err,echo=F,warning=F,message=F}
+# build error summary table
+boston.err.table <- rbind(cbind("Full Model", boston.lm.err))
+boston.err.table <- rbind(boston.err.table, cbind("Best Subset", boston.sub.err))
+boston.err.table <- rbind(boston.err.table, cbind("Ridge Regression", boston.ridge.err))
+boston.err.table <- rbind(boston.err.table, cbind("Lasso Regression", boston.lasso.err))
+boston.err.table <- rbind(boston.err.table, cbind("PCR", boston.pcr.err))
+boston.err.table <- rbind(boston.err.table, cbind("PLS", boston.pls.err))
+colnames(boston.err.table) <- c("Method", "MSE")
+
+kable(boston.err.table, caption = "Test rates")
+```
+
+
+## Part c
+
+The Best Subset model does not include all of the features and is using 9-variables.  This is because not all of them add value to the model in order to help predict per capita crime rate.
+
+# 4. 
+
+The [Mushroom data set](https://archive.ics.uci.edu/ml/datasets/mushroom) from the [UCI Machine Learning Repository](https://archive.ics.uci.edu/ml/datasets.html) is a hypothetical sampling of 23 species of gilled mushrooms in the Agaricus and Lepiota family.  Each species is classified as edible, poisonous, or unknown.  The dataset contains a total of 8124 observations with 22 different predictors including, cap shape, cap surface, cap color, bruises, odor, gill characteristics, stalk characteristics, veil type, veil color, ring number, ring type, spore print color, population, and habitat, with the following attribute information. 
+
+1. cap-shape: bell=b,conical=c,convex=x,flat=f,knobbed=k,sunken=s
+2. cap-surface: fibrous=f,grooves=g,scaly=y,smooth=s
+3. cap-color: brown=n,buff=b,cinnamon=c,gray=g,green=r,pink=p,purple=u,red=e,white=w,yellow=y
+4. bruises?: bruises=t,no=f
+5. odor: almond=a,anise=l,creosote=c,fishy=y,foul=f,musty=m,none=n,pungent=p,spicy=s
+6. gill-attachment: attached=a,descending=d,free=f,notched=n
+7. gill-spacing: close=c,crowded=w,distant=d
+8. gill-size: broad=b,narrow=n
+9. gill-color: black=k,brown=n,buff=b,chocolate=h,gray=g,green=r,orange=o,pink=p,purple=u,red=e,white=w,yellow=y
+10. stalk-shape: enlarging=e,tapering=t
+11. stalk-root: bulbous=b,club=c,cup=u,equal=e,rhizomorphs=z,rooted=r,missing=?
+12. stalk-surface-above-ring: fibrous=f,scaly=y,silky=k,smooth=s
+13. stalk-surface-below-ring: fibrous=f,scaly=y,silky=k,smooth=s
+14. stalk-color-above-ring: brown=n,buff=b,cinnamon=c,gray=g,orange=o,pink=p,red=e,white=w,yellow=y
+15. stalk-color-below-ring: brown=n,buff=b,cinnamon=c,gray=g,orange=o,pink=p,red=e,white=w,yellow=y
+16. veil-type: partial=p,universal=u
+17. veil-color: brown=n,orange=o,white=w,yellow=y
+18. ring-number: none=n,one=o,two=t
+19. ring-type: cobwebby=c,evanescent=e,flaring=f,large=l, none=n,pendant=p,sheathing=s,zone=z
+20. spore-print-color: black=k,brown=n,buff=b,chocolate=h,green=r, orange=o,purple=u,white=w,yellow=y
+21. population: abundant=a,clustered=c,numerous=n,scattered=s,several=v,solitary=y
+22. habitat: grasses=g,leaves=l,meadows=m,paths=p,urban=u,waste=w,woods=d
+
+Addressing a classification problem to predict whether the mushroom is poisonous or not is of interest. The Audobon Society Field Guide presents that there is not a simple rule for determing edibility of a mushroom.
+
+The data does not have any headers.  Based on the data definition they are added after the data is loaded. The variables are categorical (factors) with multiple levels except for the `veil.type` variable.  It has only one level in the data, therefore it is removed from further analysis.  
+
+```{r mush_load,echo=F,warning=F,message=F}
+# reference: https://archive.ics.uci.edu/ml/datasets/mushroom
+# load dataset from url and set column names
+url <- "https://archive.ics.uci.edu/ml/machine-learning-databases/mushroom/agaricus-lepiota.data"
+mushrooms <- read.table(file = url, header = F, sep = ",", stringsAsFactors = T,
+                        col.names = c("class","cap.shape","cap.surface","cap.color","bruises","odor",
+                         "gill.attachment","gill.spacing","gill.size","gill.color","stalk.shape",
+                         "stalk.root","stalk.surface.above.ring","stalk.surface.below.ring",
+                         "stalk.color.above.ring","stalk.color.below.ring","veil.type","veil.color",
+                         "ring.number","ring.type","spore.print.color","population","habitat"))
+
+str(mushrooms)
+```
+
+Looking at comparisons of cap shapes we notice that mushrooms with a bell (b) cap shape are mostly edible (e) and all sunken (s) cap shaped mushrooms are edible (e).  We can see an interesting relationship between odor and whether a mushroom is edible or not.  When mushrooms have and almond (a), or anise (l) odor they are classified as edible (e).  However, if the mushroom has a creosote (c), foul (f), pungent (p), spicy (s), or fishy (y) odor they are classified as poisonous (p).  Those that have no (n) odor can be either.  Looking at the relationship between population and class we see that mushrooms that are in an abundant (a), clustered (c), or numerous (n) population are mostly edible (e).  Those that are in a scattered (s), several (v), or solitary (y) population can be either edible (e) or poisonous (p).  Viewing the relationship between cap surface and class shows that those with grooves (g) are all poisonous (p) and those that are fibrous (f), scaly (s), or smooth (y) can be either edible (e) or poisonous (p). 
+
+```{r mush_plot,echo=F,warning=F,message=F}
+# ggplot
+p1 <- ggplot(mushrooms, aes(x=cap.shape, fill=class)) +
+  geom_bar() +
+  theme_bw() +
+  scale_fill_brewer(palette="PuBu") +
+  ggtitle("Count of cap shape by class")
+
+p2 <- ggplot(mushrooms, aes(x=cap.surface, fill=class)) +
+  geom_bar() +
+  theme_bw() +
+  scale_fill_brewer(palette="PuBu") +
+  ggtitle("Count of cap surface by class")
+
+p3 <- ggplot(mushrooms, aes(x=odor, fill=class)) +
+  geom_bar() +
+  theme_bw() +
+  scale_fill_brewer(palette="PuBu") +
+  ggtitle("Count of odor by class")
+
+p4 <- ggplot(mushrooms, aes(x=population, fill=class)) +
+  geom_bar() +
+  theme_bw() +
+  scale_fill_brewer(palette="PuBu") +
+  ggtitle("Count of population by class")
+
+grid.arrange(p1, p2, p3, p4, ncol = 2)
+```
+
+The mosaic plot for the relationship between cap color and class shows that mushrooms with a cap color of cinnamon (c), green (r), or purple (u) are generally edible.  The mosaic plot for the relationship between habitat and class shows that the majority of mushrooms that are in meadows (m) and waste (w) are mostly edible.
+
+```{r mush_mosaic,echo=F,warning=F,message=F}
+par(mfrow=c(1,1))
+mosaicplot(~ cap.color+class, data = mushrooms, shade=F,
+           color = brewer.pal(n = 6, name = "PuBu"),
+           main = "Relationship between cap color and class")
+
+mosaicplot(~ habitat+class, data = mushrooms, shade=F,
+           color = brewer.pal(n = 6, name = "PuBu"),
+           main = "Relationship between habitat and class")
+```
+
+One of the biggest challenges with the data is that all of the columns are categorical (factor) variables using one-letter abbreviations for the data making the different levels hard to interpret.  Dummy variable encoding was used to convert the categorical data to binary.  We fit Logistic Regression, LDA, McLustDA, MclustDA with EDDA, and SVM using the `spore.print.color` variable.    
+
+```{r mush_dummy,echo=F,include=F,warning=F,message=F}
+# References:
+# https://machinelearningmastery.com/why-one-hot-encode-data-in-machine-learning/
+# https://amunategui.github.io/dummyVar-Walkthrough/
+# https://stackoverflow.com/questions/40678170/caret-dummy-vars-exclude-target
+# Retrieved: 02/23/18
+
+# remove variables with only one level
+mushrooms$veil.type <- NULL
+
+# one-hot encoding to create dummy variables
+# using fullRank = T avoids the 'dummy variable' trap.
+dmy <- dummyVars(~., data = mushrooms, fullRank = T)
+dummy.mush <- data.frame(predict(dmy, newdata = mushrooms))
+colnames(dummy.mush)[1] <- "poisonous"
+
+# 5-fold cross validation 
+k <- 5
+```
+
+Logistic Regression
+
+```{r mush_glm_vsa,echo=F,warning=F,message=F}
+# validation set approach
+# set seed
+set.seed(seed)
+
+# split into training and test
+mush.train.lr <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.6)
+mush.test.lr <- dummy.mush[-mush.train.lr, ]
+
+# fit logistic regression
+fit.mush.glm.vsa <- glm(poisonous ~ spore.print.color.h + spore.print.color.k +
+                        spore.print.color.n + spore.print.color.o +
+                        spore.print.color.u + spore.print.color.w +
+                        spore.print.color.y,
+                        data = dummy.mush,
+                        family = binomial(), subset = mush.train.lr)
+
+# predict
+prob.mush.glm.vsa <- predict(fit.mush.glm.vsa, mush.test.lr, type="response")
+pred.mush.glm.vsa <- ifelse(prob.mush.glm.vsa > 0.5, 1, 0)
+
+# confusion matrix
+kable(table("Pred."=pred.mush.glm.vsa, "Actual"=mush.test.lr$poisonous),
+      caption = "Confusion Matrix for vsa")
+
+# error rate
+mush.glm.vsa.error <- round(mean(pred.mush.glm.vsa != mush.test.lr$poisonous), 7)
+```
+
+```{r mush_glm_loocv,echo=F,warning=F,message=F}
+# LOOCV
+# set seed
+set.seed(seed)
+
+# create for loop performing LOOCV
+mush.glm.loocv.err <- rep(0, 100)
+for (i in 1:100) {
+  # fit logistic regression
+  fit.glm.loocv <- glm(poisonous ~ spore.print.color.h + spore.print.color.k +
+                      spore.print.color.n + spore.print.color.o +
+                      spore.print.color.u + spore.print.color.w +
+                      spore.print.color.y,
+                      data = dummy.mush[-i, ],
+                      family = "binomial")
+  
+  # predict
+  pred.glm.loocv <- predict.glm(fit.glm.loocv, dummy.mush[i, ], type = "response") > 0.5
+  pois <- dummy.mush[i, ]$poisonous == 1
+  if (pred.glm.loocv != pois)
+      mush.glm.loocv.err[i] <- 1
+}
+
+# error rate
+mush.glm.loocv.error <- round(mean(mush.glm.loocv.err), 7)
+```
+
+```{r mush_glm_cv,echo=F,warning=F,message=F}
+# k-fold
+# set seed
+set.seed(seed)
+
+# Create 5 folds
+folds <- sample(1:k, nrow(dummy.mush), replace = T)
+
+# Create empty data frame to store error rates
+mush.err <- NULL
+
+# perform 5-fold cross validation
+for(i in 1:k){
+  # fit logistic regression
+  mush.glm.cv <- glm(poisonous ~ spore.print.color.h + spore.print.color.k +
+                      spore.print.color.n + spore.print.color.o +
+                      spore.print.color.u + spore.print.color.w +
+                      spore.print.color.y,
+                      data = dummy.mush[folds!=i,], family = binomial())
+  
+  # predict
+  prob.mush.glm.cv <- predict(mush.glm.cv, 
+                              dummy.mush[folds==i,],
+                              type="response")
+  pred.mush.glm.cv <- ifelse(prob.mush.glm.cv > 0.5, 1, 0)
+  
+  # calculate error and add to array
+  mush.err[i] <- mean(pred.mush.glm.cv != dummy.mush$poisonous[folds==i]) 
+}
+
+# display error rates
+kable(data.frame(mush.err),
+       caption = "Prediction Error Rates for 5-fold cv")
+
+# error rate
+mush.glm.cv.error <- round(mean(mush.err), 7)
+```
+
+```{r mush_glm_err,echo=F,include=F,warning=F,message=F}
+mush.glm.col.err <- cbind("Logistic Regression", mush.glm.vsa.error, mush.glm.loocv.error, mush.glm.cv.error)
+mush.errors <- rbind(mush.glm.col.err)
+```
+
+LDA
+
+```{r mush_lda_vsa,echo=FALSE,warning=F,message=F}
+# validation set approach
+# set seed
+set.seed(seed)
+
+# split into training and test
+mush.train.lda <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.6)
+mush.test.lda <- dummy.mush[-mush.train.lda, ]
+
+# fit model using linear discriminant analysis (LDA)
+fit.mush.lda.vsa <- lda(poisonous ~ spore.print.color.h + spore.print.color.k +
+                        spore.print.color.n + spore.print.color.o +
+                        spore.print.color.u + spore.print.color.w +
+                        spore.print.color.y, 
+                        data = dummy.mush,
+                        subset = mush.train.lda)
+
+# predict
+mush.lda.prob <- predict(fit.mush.lda.vsa, 
+                         newdata = mush.test.lda, 
+                         type = "response")
+
+# create confusion matrix
+kable(table(mush.test.lda$poisonous, mush.lda.prob$class),
+      caption = "LDA Confusion Matrix for vsa")
+
+# error rates
+mush.lda.vsa.error <- round(mean(mush.lda.prob$class != mush.test.lda$poisonous), 7) 
+```
+
+```{r mush_lda_loocv,echo=FALSE,warning=F,message=F}
+# LOOCV
+# set seed
+set.seed(seed)
+
+# References: 
+# https://www.statmethods.net/advstats/discriminant.html
+# http://maths-people.anu.edu.au/~johnm/courses/mathdm/2008/pdf/r-exercisesVI.pdf
+# Retrieved: 03/02/18
+
+# fit model using LDA with LOOCV, CV = T option
+fit.mush.lda.loocv <- lda(poisonous ~ spore.print.color.h + spore.print.color.k +
+                          spore.print.color.n + spore.print.color.o +
+                          spore.print.color.u + spore.print.color.w +
+                          spore.print.color.y, 
+                          data = dummy.mush, CV = T)
+
+# create confusion matrix
+ct <- table(dummy.mush$poisonous, fit.mush.lda.loocv$class)
+kable(ct, caption = "LDA Confusion Matrix for LOOCV")
+
+# error rates
+mush.lda.loocv.error <- round(1 - sum(diag(prop.table(ct))), 7)
+```
+
+```{r mush_lda_cv,echo=F,warning=F,message=F}
+# k-fold
+# set seed
+set.seed(seed)
+
+# reference: https://stats.stackexchange.com/questions/61090/how-to-split-a-data-set-to-do-10-fold-cross-validation
+# retrieved: 03/02/18
+
+# Create 5 folds
+folds <- sample(1:k, nrow(dummy.mush), replace = T)
+
+# Create empty data frame to store error rates
+mush.err <- NULL
+
+# perform 5-fold cross validation
+for(i in 1:k){
+  # fit model using linear discriminant analysis (LDA)
+  fit.mush.lda.cv <- lda(poisonous ~ spore.print.color.h + spore.print.color.k +
+                          spore.print.color.n + spore.print.color.o +
+                          spore.print.color.u + spore.print.color.w +
+                          spore.print.color.y, 
+                          data = dummy.mush[folds!=i,])
+  
+  # predict
+  mush.prob <- predict(fit.mush.lda.cv, 
+                       dummy.mush[folds==i,], 
+                       type="response")
+  
+  # calculate error and add to array
+  mush.err[i] <- mean(mush.prob$class != dummy.mush$poisonous[folds==i])
+}
+
+# display error rates
+kable(data.frame(mush.err),
+       caption = "Prediction Error Rates for 5-fold cv")
+
+# error rate
+mush.lda.cv.error <- round(mean(mush.err), 7)
+```
+
+```{r mush_lda_err,echo=F,include=F,warning=F,message=F}
+mush.lda.col.err <- cbind("LDA", mush.lda.vsa.error, mush.lda.loocv.error, mush.lda.cv.error)
+mush.errors <- rbind(mush.errors, mush.lda.col.err)
+```
+
+MclustDA
+
+```{r mush_mclust_vsa,echo=F,warning=F,message=F}
+# validation set approach
+# set seed
+set.seed(seed)
+
+# split into training
+rows <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.6)
+mush.train <- dummy.mush[rows, ]
+mush.test <- dummy.mush[-rows, ]
+
+# fit model using MclustDA
+mush.fit.mclustda <-  MclustDA(mush.train[, c(78:85)], mush.train$poisonous)
+mush.mclustda.summary <- summary(mush.fit.mclustda, 
+                                 newdata = mush.test[, c(78:85)], 
+                                 newclass = mush.test$poisonous)
+
+# Predict
+mush.preds <- predict.MclustDA(mush.fit.mclustda, 
+                               mush.test[, c(78:85)])
+
+# print summary
+kable(rbind("Training" = mush.mclustda.summary[["err"]], 
+            "Test" = mush.mclustda.summary[["err.newdata"]]),
+      caption = "Error Rates")
+
+kable(mush.mclustda.summary[["tab"]],
+      caption = "Training Confusion Matrix")
+
+# kable(auto.mclustda.summary[["tab.newdata"]],
+#       caption = "Test Confusion Matrix")
+
+kable(table(mush.preds$classification, mush.test$poisonous),
+      caption = "Test Confusion Matrix")
+
+# calculate error rate
+mush.mclustda.vsa.err <- round(mean(mush.test$poisonous != mush.preds$classification), 7)
+```
+
+```{r mush_mclust_loocv,echo=F,warning=F,message=F}
+# LOOCV
+# set seed
+set.seed(seed)
+
+# create for loop performing LOOCV
+mush.loocv.err <- rep(0, 100)
+for (i in 1:50) {
+  # fit model using MclustDA
+  mush.fit.mclustda <- MclustDA(dummy.mush[-i, c(78:85)], dummy.mush[-i, 1])
+
+  mush.mclustda.summary <- summary(mush.fit.mclustda, 
+                                   newdata = dummy.mush[i, c(78:85)], 
+                                   newclass = dummy.mush[i, 1])
+
+  mush.loocv.err[i] <-  mush.mclustda.summary[["err.newdata"]]
+}
+
+# error rate
+mush.mclustda.loocv.error <- round(mean(mush.loocv.err), 7)
+```
+
+```{r mush_mclust_cv,echo=F,warning=F,message=F}
+# k-fold
+# set seed
+set.seed(seed)
+
+# reference: https://stats.stackexchange.com/questions/61090/how-to-split-a-data-set-to-do-10-fold-cross-validation
+# retrieved: 03/02/18
+
+# Create folds
+folds <- sample(1:k, nrow(dummy.mush), replace = T)
+
+# Create empty data frame to store error rates
+mush.err <- NULL
+
+# perform 5-fold cross validation
+for(i in 1:k){
+  # segment the data by fold using the which() function 
+  testIndexes <- which(folds == i, arr.ind = T)
+
+  trainData <- dummy.mush[-testIndexes, c(78:85)]
+  testData <- dummy.mush[testIndexes, c(78:85)]
+  train.class <- dummy.mush[-testIndexes, 1]
+  test.class <- dummy.mush[testIndexes, 1]
+
+  # fit model using MclustDA
+  mush.fit.mclustda <- MclustDA(trainData, train.class)
+
+  mush.mclustda.summary <- summary(mush.fit.mclustda, 
+                                   newdata = testData, 
+                                   newclass = test.class)
+
+  mush.err[i] <-  mush.mclustda.summary[["err.newdata"]]
+}
+
+# error rate
+mush.mclustda.cv.error <- round(mean(mush.err), 7)
+```
+
+```{r mush_mclust_err,echo=F,include=F,warning=F,message=F}
+mush.mclustda.col.err <- cbind("MclustDA", mush.mclustda.vsa.err, mush.mclustda.loocv.error, mush.mclustda.cv.error)
+mush.errors <- rbind(mush.errors, mush.mclustda.col.err)
+```
+
+MclustDA EDDA
+
+```{r mush_mclust_edda_vsa,echo=F,warning=F,message=F}
+# validation set approach
+# set seed
+set.seed(seed)
+
+# split into training
+rows <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.6)
+mush.train <- dummy.mush[rows, ]
+mush.test <- dummy.mush[-rows, ]
+
+# fit model using MclustDA type EDDA
+mush.fit.mclustda.edda <-  MclustDA(mush.train[, c(78:85)], 
+                                    mush.train$poisonous, 
+                                    modelType = "EDDA")
+
+mush.mclustda.edda.summary <- summary(mush.fit.mclustda.edda, 
+                                      newdata = mush.test[, c(78:85)], 
+                                      newclass = mush.test$poisonous)
+
+mush.preds <- predict.MclustDA(mush.fit.mclustda.edda, 
+                               mush.test[, c(78:85)])
+
+# print summary
+kable(rbind("Training" = mush.mclustda.edda.summary[["err"]], 
+            "Test" = mush.mclustda.edda.summary[["err.newdata"]]),
+      caption = "Error Rates")
+
+kable(mush.mclustda.edda.summary[["tab"]],
+      caption = "Training Confusion Matrix")
+
+# kable(auto.mclustda.summary[["tab.newdata"]],
+#       caption = "Test Confusion Matrix")
+
+kable(table(mush.preds$classification, mush.test$poisonous),
+      caption = "Test Confusion Matrix")
+
+# calculate error rate
+mush.mclustda.edda.vsa.err <- round(mean(mush.test$poisonous != mush.preds$classification), 7)
+```
+
+```{r mush_mclust_edda_loocv,echo=F,warning=F,message=F}
+# LOOCV
+# set seed
+set.seed(seed)
+
+# create for loop performing LOOCV
+mush.loocv.err <- rep(0, 100)
+for (i in 1:50) {
+  # fit model using MclustDA type EDDA
+  mush.fit.mclustda.edda <- MclustDA(dummy.mush[-i, c(78:85)], 
+                                     dummy.mush[-i, 1],
+                                     modelType = "EDDA")
+
+  mush.mclustda.edda.summary <- summary(mush.fit.mclustda.edda, 
+                                        newdata = dummy.mush[i, c(78:85)], 
+                                        newclass = dummy.mush[i, 1])
+
+  mush.loocv.err[i] <- mush.mclustda.edda.summary[["err.newdata"]]
+}
+
+# error rate
+mush.mclustda.edda.loocv.error <- round(mean(mush.loocv.err), 7)
+```
+
+```{r mush_mclust_edda_cv,echo=F,warning=F,message=F}
+# k-fold
+# set seed
+set.seed(seed)
+
+# reference: https://stats.stackexchange.com/questions/61090/how-to-split-a-data-set-to-do-10-fold-cross-validation
+# retrieved: 03/02/18
+
+# Create folds
+folds <- sample(1:k, nrow(dummy.mush), replace = T)
+
+# Create empty data frame to store error rates
+mush.err <- NULL
+
+# perform 5-fold cross validation
+for(i in 1:k){
+  # segment the data by fold using the which() function 
+  testIndexes <- which(folds == i, arr.ind = T)
+
+  trainData <- dummy.mush[-testIndexes, c(78:85)]
+  testData <- dummy.mush[testIndexes, c(78:85)]
+  train.class <- dummy.mush[-testIndexes, 1]
+  test.class <- dummy.mush[testIndexes, 1]
+
+  # fit model using MclustDA type EDDA
+  mush.fit.mclustda.edda <- MclustDA(trainData, 
+                                     train.class, 
+                                     modelType = "EDDA")
+
+  mush.mclustda.edda.summary <- summary(mush.fit.mclustda.edda, 
+                                   newdata = testData, 
+                                   newclass = test.class)
+  
+  mush.preds <- predict.MclustDA(mush.fit.mclustda.edda, 
+                                 testData)
+  
+  #tbl <- table(mush.preds$classification, test.class)
+  #mush.err[i] <- 1-((tbl[1, 1]+tbl[2, 2])/sum(tbl))
+
+  mush.err[i] <-  mush.mclustda.edda.summary[["err.newdata"]]
+}
+
+# error rate
+mush.mclustda.edda.cv.error <- round(mean(mush.err), 7)
+```
+
+```{r mush_mclust_edda_err,echo=F,include=F,warning=F,message=F}
+mush.mclustda.edda.col.err <- cbind("MclustDA EDDA", mush.mclustda.edda.vsa.err, mush.mclustda.edda.loocv.error, mush.mclustda.edda.cv.error)
+mush.errors <- rbind(mush.errors, mush.mclustda.edda.col.err)
+```
+
+SVM
+
+```{r mush_svm_vsa,echo=F,warning=F,message=F}
+# validation set approach
+# set seed
+set.seed(seed)
+
+# split into training and test
+mush.train <- sample(nrow(dummy.mush), nrow(dummy.mush)*0.6)
+mush.test <- dummy.mush[-mush.train, ]
+
+# fit logistic regression
+fit.mush.svm.vsa <- svm(poisonous ~ spore.print.color.h + spore.print.color.k +
+                        spore.print.color.n + spore.print.color.o +
+                        spore.print.color.u + spore.print.color.w +
+                        spore.print.color.y,
+                        data = dummy.mush,
+                        family = binomial(), subset = mush.train)
+
+# predict
+prob.mush.svm.vsa <- predict(fit.mush.svm.vsa, mush.test)
+pred.mush.svm.vsa <- ifelse(prob.mush.svm.vsa > 0.5, 1, 0)
+
+# confusion matrix
+kable(table("Pred."=pred.mush.svm.vsa, "Actual"=mush.test$poisonous),
+      caption = "Confusion Matrix for vsa")
+
+# error rate
+mush.svm.vsa.error <- round(mean(pred.mush.svm.vsa != mush.test$poisonous), 7)
+```
+
+```{r mush_svm_loocv,echo=F,warning=F,message=F}
+# LOOCV
+# set seed
+set.seed(seed)
+
+# create for loop performing LOOCV
+mush.loocv.err <- rep(0, 100)
+for (i in 1:100) {
+  # fit logistic regression
+  fit.svm.loocv <- svm(poisonous ~ spore.print.color.h + spore.print.color.k +
+                      spore.print.color.n + spore.print.color.o +
+                      spore.print.color.u + spore.print.color.w +
+                      spore.print.color.y,
+                      data = dummy.mush[-i, ])
+  
+  # predict
+  pred.glm <- predict(fit.svm.loocv, dummy.mush[i, ]) > 0.5
+  pois <- dummy.mush[i, ]$poisonous == 1
+  if (pred.glm != pois)
+      mush.loocv.err[i] <- 1
+}
+
+# error rate
+mush.svm.loocv.error <- round(mean(mush.loocv.err), 7)
+```
+
+```{r mush_svm_cv,echo=F,warning=F,message=F}
+# k-fold
+# set seed
+set.seed(seed)
+
+# Create 5 folds
+folds <- sample(1:k, nrow(dummy.mush), replace = T)
+
+# Create empty data frame to store error rates
+mush.err <- NULL
+
+# perform 5-fold cross validation
+for(i in 1:k){
+  # fit logistic regression
+  mush.svm.cv <- svm(poisonous ~ spore.print.color.h + spore.print.color.k +
+                      spore.print.color.n + spore.print.color.o +
+                      spore.print.color.u + spore.print.color.w +
+                      spore.print.color.y,
+                      data = dummy.mush[folds!=i,])
+  
+  # predict
+  prob.mush.svm.cv <- predict(mush.svm.cv, 
+                              dummy.mush[folds==i,],
+                              type="response")
+  pred.mush.svm.cv <- ifelse(prob.mush.svm.cv > 0.5, 1, 0)
+  
+  # calculate error and add to array
+  mush.err[i] <- mean(pred.mush.svm.cv != dummy.mush$poisonous[folds==i]) 
+}
+
+# display error rates
+kable(data.frame(mush.err),
+      caption = "Prediction Error Rates for 5-fold cv")
+
+# error rate
+mush.svm.cv.error <- round(mean(mush.err), 7)
+```
+
+```{r mush_svm_err,echo=F,include=F,warning=F,message=F}
+mush.svm.col.err <- cbind("SVM", mush.svm.vsa.error, mush.svm.loocv.error, mush.svm.cv.error)
+mush.errors <- rbind(mush.errors, mush.svm.col.err)
+```
+
+Using a combination of VSA, LOOCV, and cross validation to evaluate model performance we can see from the summary that the test error rates are very close, except for MclustDA with EDDA.  Due to the computational intensity, LOOCV was unable to fit all $8124$ observations to give an accurate result.  A sampling of 100 observations for each method results in an error rate of $0$ for McLustDA, and $0.16$ for Logistic Regression and SVM, which could be wrong since all of the observations were not used.  KNN was not fit due to the error `too many ties in knn` and QDA was not fit due to the error `rank deficiency in group e`.  MclustDA using 5-fold cross validation appears to have the lowest error rate indicating it may be the better fitting model to predict mushroom edibility.
+
+```{r mush_summ_err,echo=F,warning=F,message=F}
+colnames(mush.errors) <- c("Method", "VSA", "LOOCV", "5-Fold CV")
+kable(mush.errors, 
+      caption = "Test Error rates for different methods")
+```
+
+However, after analyzing the above results and doing some research it appears that for the `mushroom` data we would not normally use the above models and instead would use a regression tree or gradient boosting.  Fitting a regression tree produces the following results.
+
+```{r mush_tree,echo=FALSE,warning=F,message=F}
+# set seed reproducibility
+set.seed(seed)
+
+# fit regression tree
+mush_rpart <- rpart(class ~ ., data = mushrooms,
+                    control = rpart.control(minsplit = 10))
+
+# Pruning the tree
+# choosing the best complexity parameter "cp" to prune the tree
+cp.optim <- mush_rpart$cptable[which.min(mush_rpart$cptable[,"xerror"]),"CP"]
+# tree prunning using the best complexity parameter. For more in
+tree <- prune(mush_rpart, cp=cp.optim)
+
+# predict
+pred <- predict(tree, mushrooms[-1])
+
+# show tree
+rpart.plot(tree)
+```
